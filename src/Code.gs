@@ -1,7 +1,10 @@
 function doGet() {
   return HtmlService.createTemplateFromFile('index')
     .evaluate()
-    .setTitle('Order Pickup Labels')
+    .setTitle('Pet Food Pantry — Order Pickup Labels')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
-function include(name){ return HtmlService.createHtmlOutputFromFile(name).getContent(); }
+
+function include(filename) {
+  return HtmlService.createHtmlOutputFromFile(filename).getContent();
+}

@@ -1,72 +1,86 @@
-function apiLookup(formId) {
-  const info = lookupBagLabelInfo(formId);
-  if (!info.ok) return info;
+/** rpc.gs — Pantry Order Fulfillment APIs
+ *  Exposed to frontend via google.script.run
+ */
 
-  // Puppy/Kitten check
-  let hasPuppyKitten = false;
-  for (let i = 1; i <= 6; i++) {
-    const age = Number(info.rowObj[`Pet ${i} Age`] || '');
-    const units = String(info.rowObj[`Pet ${i} Units`] || '').trim().toLowerCase();
-    if (!isNaN(age) && age > 0 && age <= 12 && units === 'months') {
-      hasPuppyKitten = true;
-      break;
-    }
+function apiLookup(formId) {
+  const id = String(formId || '').trim();
+  if (!/^\d{12}$/.test(id)) {
+    return { ok: false, message: 'Invalid Form ID (must be 12 digits).' };
   }
 
-  // Staff exception check
-  const hasSpecialRequest = Boolean(String(info.rowObj['Special Request'] || '').trim());
+  const { rowIndex, rowObj, error } = _getRowByFormId(id);
+  if (error) return { ok: false, message: error };
+
+  const first = String(rowObj['First Name'] || '').trim();
+  const last = String(rowObj['Last Name'] || '').trim();
+  const fullName = `${first} ${last}`.trim();
+
+  const tsRaw = rowObj['Timestamp'];
+  const requestDate = _parseDate(tsRaw);
+  const requestDatePretty = requestDate
+    ? Utilities.formatDate(requestDate, Session.getScriptTimeZone(), 'MMM d, yyyy')
+    : '';
+
+  const pickupWindow = _readPickupWindow(rowObj);
+  const additionalServices = _parseServices(rowObj['Additional Services']);
+  const alerts = _computeAlerts(rowObj);
 
   return {
-    ...info,
-    pickupWindow: _readPickupWindow(info.rowObj),
-    hasPuppyKitten,
-    hasSpecialRequest,
-    fleaFlowEnabled: OP_CONFIG.FLEA_FLOW_FEATURE_ENABLED
+    ok: true,
+    rowIndex,
+    formId: id,
+    fullName,
+    firstName: first,
+    lastName: last,
+    requestDatePretty,
+    pickupWindow,
+    additionalServices,
+    alerts
   };
 }
 
-function apiGenerateLabels(formId, count, flea) {
-  const res = generateBagLabels(formId, count);
+function apiGenerateLabels(formId, count, fleaProvided) {
+  try {
+    const id = String(formId || '').trim();
+    const n = Number(count || 0);
+    if (!/^\d{12}$/.test(id)) return _fail('Invalid Form ID (12 digits required).');
+    if (!(n >= 1 && n <= 5)) return _fail('Label count must be between 1 and 5.');
 
-  if (res.ok) {
-    const { rowIndex, rowObj } = _getRowByFormId(formId);
-    const ss = SpreadsheetApp.openById(OP_CONFIG.SOURCE_SHEET_ID);
-    const sh = ss.getSheetByName(OP_CONFIG.SOURCE_SHEET_NAME);
-    const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+    const { rowObj, error } = _getRowByFormId(id);
+    if (error) return _fail(error);
 
-    // Flea Medication Provided
-    if (flea != null) {
-      let col = headers.indexOf("Flea Medication Provided");
-      if (col < 0) {
-        col = headers.length;
-        sh.getRange(1, col + 1).setValue("Flea Medication Provided");
-      }
-      sh.getRange(rowIndex, col + 1).setValue(flea);
+    const first = String(rowObj['First Name'] || '').trim();
+    const last = String(rowObj['Last Name'] || '').trim();
+    const pickupWindow = _readPickupWindow(rowObj) || '';
+    const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'M/d/yyyy');
+
+    const folder = DriveApp.getFolderById(CFG.OUTPUT_FOLDER_ID);
+    const ts = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd_HHmm');
+    const safeLast = last || 'Last';
+
+    let bagPdfs;
+    try {
+      bagPdfs = _makeBagLabelPdfs_(folder, first, last, pickupWindow, today, n, ts, id);
+    } catch (e) {
+      return _fail('Bag label build failed', e);
     }
 
-    // Number of Items
-    let colNum = headers.indexOf("Number of Items");
-    if (colNum < 0) {
-      colNum = headers.length;
-      sh.getRange(1, colNum + 1).setValue("Number of Items");
-    }
-    sh.getRange(rowIndex, colNum + 1).setValue(Number(count));
+    if (!bagPdfs.length) return _fail('No pages generated.');
 
-    // Fulfilled Date
-    let colDate = headers.indexOf("Fulfilled Date");
-    if (colDate < 0) {
-      colDate = headers.length;
-      sh.getRange(1, colDate + 1).setValue("Fulfilled Date");
+    let merged;
+    try {
+      merged = _mergePdfsViaService_(bagPdfs, `BagLabels_${safeLast}_${ts}.pdf`, folder);
+    } catch (e) {
+      return _fail('Merge service error', e);
     }
-    sh.getRange(rowIndex, colDate + 1).setValue(new Date());
+    if (!merged) return _fail('Merge service failed.');
 
-    // Notification Status
-    apiSetNotification(formId, "Ready");
+    _safeTrashFiles_(bagPdfs);
+
+    _updateSheetAfterLabels(id, n, fleaProvided);
+
+    return { ok: true, fileId: merged.getId(), url: merged.getUrl(), name: merged.getName() };
+  } catch (err) {
+    return _fail('Unexpected error creating labels', err);
   }
-
-  return res;
-}
-
-function apiSetNotification(formId, status) {
-  return setNotificationStatus(formId, status);
 }
