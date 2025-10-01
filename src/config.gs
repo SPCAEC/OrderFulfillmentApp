@@ -1,0 +1,14 @@
+const OP_CONFIG = {
+  SOURCE_SHEET_ID: '1JrfUHDAPMCIvOSknKoN3vVR6KQZTKUaNLpsRru7cekU',
+  SOURCE_SHEET_NAME: 'Form Responses 1',
+  STATUS_COL_NAME: 'Notification Status',
+  BAG_TEMPLATE_SLIDES_ID: '1hFOGjr4PWmXNeO0grA6C0XUhKia3Hg4IV94n7FI-lSs',
+  OUTPUT_FOLDER_ID: '1wGhhU3XulZVW8JzO1AUlq0L3XHNVGG-b',
+  MERGE_API_URL: 'https://pdf-merge-service.onrender.com/merge',
+  BAG_IMAGE_PLACEHOLDER: '{{barcode}}',
+  BARCODE_TYPE: 'code128',
+  BARCODE_WIDTH_PX: 600,
+  BARCODE_HEIGHT_PX: 220,
+  DEBUG: true,
+  FLEA_FLOW_FEATURE_ENABLED: true
+};

@@ -1,0 +1,129 @@
+<script>
+window.addEventListener('load', () => {
+  console.clear(); console.log("🔥 Pickup App Loaded");
+
+  const formIdInput = document.getElementById('formIdInput');
+  const lookupBtn = document.getElementById('lookupBtn');
+  const scanBtn = document.getElementById('scanBtn');
+  const startOverBtn = document.getElementById('startOverBtn');
+  const msgDiv = document.getElementById('message');
+  const resultDiv = document.getElementById('result');
+
+  let state = { formId:null, lookup:null, flea:null };
+
+  function setMsg(text, type){
+    msgDiv.classList.remove('error','success');
+    if(type==='error') msgDiv.classList.add('error');
+    if(type==='success') msgDiv.classList.add('success');
+    msgDiv.innerHTML = text||'';
+  }
+  function spinner(t){ return `<span class="spinner"></span> <span>${t}</span>`; }
+  function resetUI(){
+    state = { formId:null, lookup:null, flea:null };
+    formIdInput.value=''; formIdInput.disabled=false;
+    lookupBtn.disabled=true; scanBtn.disabled=false;
+    resultDiv.innerHTML=''; setMsg('');
+  }
+  startOverBtn.onclick = resetUI;
+
+  // Input handling
+  formIdInput.addEventListener('input', () => {
+    formIdInput.value = formIdInput.value.replace(/\D/g,'');
+    lookupBtn.disabled = formIdInput.value.length !== 12;
+  });
+  formIdInput.addEventListener('keydown', e=>{
+    if(e.key==='Enter' && !lookupBtn.disabled){ e.preventDefault(); lookupBtn.click(); }
+  });
+
+  // Lookup flow
+  lookupBtn.onclick = () => {
+    const id = formIdInput.value.trim();
+    if(!/^\d{12}$/.test(id)){ setMsg("Form ID must be 12 digits","error"); return; }
+    setMsg(spinner("Looking up…")); lookupBtn.disabled=true; formIdInput.disabled=true;
+    google.script.run.withSuccessHandler(renderLookup).withFailureHandler(err=>{
+      console.error(err); setMsg("Server error","error"); lookupBtn.disabled=false; formIdInput.disabled=false;
+    }).apiLookup(id);
+  };
+
+  function renderLookup(res){
+    if(!res.ok){ setMsg(res.message,"error"); lookupBtn.disabled=false; formIdInput.disabled=false; return; }
+    state.formId = res.formId; state.lookup = res;
+    const alerts = [];
+    if(res.additionalServices.includes("Flea prevention")) alerts.push("FLEA MEDICATION REQUESTED");
+    if(res.hasPuppyKitten) alerts.push("PUPPY OR KITTEN! Did you check for special food?");
+    if(res.hasSpecialRequest) alerts.push("STAFF EXCEPTION: Check form for details.");
+
+    let html = `<div class="card">
+      <h2>${res.fullName}</h2>
+      <p>Request: ${res.requestDatePretty || ""}</p>
+      <p>Pickup Window: ${res.pickupWindow||""}</p>`;
+    if(alerts.length){
+      html+=`<div><strong style="color:red">Reminders/Alerts:</strong><ul>${alerts.map(a=>`<li style="color:red">${a}</li>`).join("")}</ul></div>`;
+    }
+    if(res.additionalServices.includes("Flea prevention") && res.fleaFlowEnabled){
+      html+=`<div class="field">
+        <label>Flea Medication Included?</label>
+        <div class="check-row"><input type="radio" name="flea" id="fleaYes" value="Yes"><label for="fleaYes">Yes</label></div>
+        <div class="check-row"><input type="radio" name="flea" id="fleaNo" value="No"><label for="fleaNo">No</label></div>
+        <div id="fleaError" class="msg error"></div>
+      </div>`;
+    }
+    html+=`<div class="actions">
+      ${[1,2,3,4,5].map(n=>`<button class="btn labelBtn" data-n="${n}">${n} Label${n>1?"s":""}</button>`).join("")}
+    </div></div>`;
+    resultDiv.innerHTML=html;
+    document.querySelectorAll(".labelBtn").forEach(b=>b.onclick=()=>chooseCount(b.dataset.n));
+  }
+
+  function chooseCount(n){
+    // check flea gating
+    const fleaRadios = document.querySelectorAll("input[name=flea]");
+    if(fleaRadios.length){
+      const checked = [...fleaRadios].find(r=>r.checked);
+      if(!checked){ document.getElementById("fleaError").innerText="Please choose an option"; return; }
+      state.flea = checked.value;
+    }
+    // confirmation modal
+    if(!confirm("ATTENTION: By printing these labels you will be notifying the client. Continue?")) return;
+    createLabels(n);
+  }
+
+  function createLabels(n){
+    setMsg(spinner("Creating labels…"));
+    google.script.run.withSuccessHandler(res=>{
+      if(!res.ok){ setMsg(res.message,"error"); return; }
+      setMsg("Labels created.","success");
+      resultDiv.innerHTML = `<div class="card">
+        <a href="${res.url}" target="_blank">Open PDF</a><br><br>
+        <button class="btn" onclick="location.reload()">Scan Next Form</button>
+      </div>`;
+      google.script.run.apiSetNotification(state.formId,"Ready");
+    }).withFailureHandler(err=>{
+      console.error(err); setMsg("Label creation failed","error");
+    }).apiGenerateLabels(state.formId,n,state.flea);
+  }
+
+  // Scanner using BarcodeDetector
+  scanBtn.onclick = async () => {
+    if(!('BarcodeDetector' in window)){ setMsg("BarcodeDetector not supported","error"); return; }
+    const detector = new BarcodeDetector({formats:["code_128","code_39","ean_13"]});
+    try{
+      const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});
+      const video = document.createElement("video"); video.autoplay=true; video.srcObject=stream;
+      resultDiv.innerHTML=`<div class="card"><video autoplay playsinline></video></div>`;
+      resultDiv.querySelector("video").srcObject=stream;
+      const check=()=>{
+        detector.detect(video).then(codes=>{
+          if(codes.length){ 
+            const code=codes[0].rawValue;
+            stream.getTracks().forEach(t=>t.stop());
+            formIdInput.value=code.replace(/\D/g,'').padStart(12,'0');
+            lookupBtn.disabled=false; lookupBtn.click();
+          } else { requestAnimationFrame(check); }
+        }).catch(e=>console.error(e));
+      };
+      requestAnimationFrame(check);
+    }catch(e){ console.error(e); setMsg("Camera error","error"); }
+  };
+});
+</script>

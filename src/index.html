@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>Pet Food Pantry — Order Pickup Labels</title>
+  <?!= include('css.app'); ?>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>Order Pickup Labels</h1>
+      <p class="subtitle">SPCA Serving Erie County</p>
+      <button id="startOverBtn" class="btn startover">Start Over</button>
+    </header>
+
+    <!-- FormID input -->
+    <div class="row">
+      <div class="field">
+        <label for="formIdInput">Scan or enter Form ID</label>
+        <input id="formIdInput" type="text" placeholder="000000000000" autofocus inputmode="numeric" autocomplete="off" />
+      </div>
+      <div class="actions">
+        <button id="scanBtn" class="btn">📷 Scan Barcode</button>
+        <button id="lookupBtn" class="btn secondary" disabled>🔍 Look Up</button>
+      </div>
+      <div id="message" class="msg" role="status" aria-live="polite"></div>
+    </div>
+
+    <!-- Dynamic content here -->
+    <div id="result" class="row"></div>
+  </div>
+
+  <?!= include('js.app'); ?>
+</body>
+</html>
