@@ -1,0 +1,14 @@
+{
+  "name": "pantry-order-fulfillment",
+  "version": "1.0.0",
+  "description": "SPCA Pet Food Pantry — Order Pickup Label App",
+  "scripts": {
+    "push": "npx clasp push",
+    "pull": "npx clasp pull",
+    "status": "npx clasp status"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@google/clasp": "^2.4.2"
+  }
+}
