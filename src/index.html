@@ -85,10 +85,14 @@
     <!-- Lookup results render here -->
     <div id="result" class="row"></div>
   </div>
+  <!-- Client-side config from server -->
+  <script>
+    const FLEA_FLOW_ENABLED = <?!= CFG.FLEA_FLOW_FEATURE_ENABLED ? 'true' : 'false' ?>;
+  </script>
 
   <!-- Client-side controller -->
   <script>
-  <?!= include('js.app'); ?>
-</script>
+    <?!= include('js.app'); ?>
+  </script>
 </body>
 </html>

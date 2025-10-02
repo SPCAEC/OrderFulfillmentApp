@@ -1,12 +1,4 @@
-
 // Frontend controller for Pantry Order Fulfillment App
-// - Scans 12-digit FormID using Chrome BarcodeDetector
-// - Calls apiLookup() to get client info, pickup window, alerts
-// - Handles flea/tick medication flow
-// - Lets volunteer pick # of labels (1–5) and confirms before generating
-// - Calls apiGenerateLabels() to build PDF labels
-// - Updates sheet after success
-
 (() => {
   const $ = sel => document.querySelector(sel);
   const $$ = sel => [...document.querySelectorAll(sel)];
@@ -73,8 +65,6 @@
     try {
       const detector = new BarcodeDetector({ formats:['code_128','ean_13','upc_a'] });
       const stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment' } });
-      const video = document.createElement('video');
-      video.autoplay = true; video.playsinline = true; video.srcObject = stream;
 
       resultDiv.innerHTML = `
         <div class="card camera">
@@ -85,8 +75,11 @@
         </div>`;
       $('#scanVideo').srcObject = stream;
 
-      const cancelBtn = $('#cancelScanBtn');
-      cancelBtn.onclick = () => { stream.getTracks().forEach(t=>t.stop()); resultDiv.innerHTML=''; setMsg('Scan canceled.'); scanBtn.disabled=false; };
+      $('#cancelScanBtn').onclick = () => {
+        stream.getTracks().forEach(t=>t.stop());
+        resultDiv.innerHTML=''; setMsg('Scan canceled.');
+        scanBtn.disabled=false;
+      };
 
       scanBtn.disabled=true; setMsg('Point camera at barcode…');
 
@@ -96,8 +89,7 @@
           if (codes.length) {
             clearInterval(interval);
             stream.getTracks().forEach(t=>t.stop());
-            const raw = codes[0].rawValue;
-            const id = toFormId(raw);
+            const id = toFormId(codes[0].rawValue);
             formIdInput.value = id;
             lookupBtn.disabled=false;
             resultDiv.innerHTML='';
@@ -155,7 +147,7 @@
 
     // Flea flow
     const showFlea = (resp.additionalServices || []).includes('Flea prevention');
-    if (showFlea && <?!= CFG.FLEA_FLOW_FEATURE_ENABLED ? 'true' : 'false' ?>){
+    if (showFlea && FLEA_FLOW_ENABLED){
       html += `
         <div class="card" style="margin-top:1rem">
           <p><strong>Flea Medication:</strong> Did you include flea prevention in this order?</p>
@@ -179,7 +171,7 @@
     resultDiv.innerHTML = html; setMsg('');
 
     // Hook flea buttons
-    if (showFlea && <?!= CFG.FLEA_FLOW_FEATURE_ENABLED ? 'true' : 'false' ?>){
+    if (showFlea && FLEA_FLOW_ENABLED){
       $('#fleaYes').onclick = () => { state.fleaChoice=true; $('#fleaMsg').textContent='Selected YES'; };
       $('#fleaNo').onclick = () => { state.fleaChoice=false; $('#fleaMsg').textContent='Selected NO'; };
     } else {
@@ -190,7 +182,7 @@
     $$('#labelButtons .btn').forEach(btn=>{
       btn.onclick = () => {
         const count = Number(btn.dataset.count);
-        if (showFlea && <?!= CFG.FLEA_FLOW_FEATURE_ENABLED ? 'true' : 'false' ?> && state.fleaChoice===null){
+        if (showFlea && FLEA_FLOW_ENABLED && state.fleaChoice===null){
           $('#labelMsg').textContent='Please choose a flea medication option first';
           $('#labelMsg').classList.add('error');
           return;
