@@ -4,6 +4,10 @@ function _makeBagLabelPdfs_(folder, first, last, pickupWindow, todayText, count,
   const pdfs = [];
   const barcodeBlob = _makeBarcodeBlob_(formId, CFG.BARCODE_TYPE, CFG.BARCODE_WIDTH_PX, CFG.BARCODE_HEIGHT_PX);
 
+  // Build "Name" as First Initial + Last Name
+  const firstInitial = first ? first.trim().charAt(0).toUpperCase() : '';
+  const displayName = (firstInitial ? firstInitial + ' ' : '') + (last || '').trim();
+
   for (let i = 1; i <= count; i++) {
     const templateFile = DriveApp.getFileById(CFG.BAG_TEMPLATE_SLIDES_ID);
     const working = templateFile.makeCopy(`_tmp_Bag_${last || 'Last'}_${ts}_${i}`, folder);
@@ -11,7 +15,7 @@ function _makeBagLabelPdfs_(folder, first, last, pickupWindow, todayText, count,
     const slide = pres.getSlides()[0];
 
     _replaceTextAll_(pres, {
-      '{{lastName}}': String(last || '').trim(),
+      '{{Name}}': displayName,
       '{{todaysDate}}': todayText,
       '{{pickupWindow}}': String(pickupWindow || '').trim(),
       '{{one}}': String(i),
