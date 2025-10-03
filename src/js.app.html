@@ -258,6 +258,15 @@
 
         // Auto-scroll to label result
         scrollAfterLayout(resultDiv, 'start');
+
+        // 🔽 Auto-trigger download/open
+        const link = document.createElement('a');
+        link.href = res.url;
+        link.download = res.name || 'BagLabels.pdf'; // fallback if no name
+        link.target = '_blank';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
       })
       .withFailureHandler(err => {
         console.error(err); setMsg('Server error creating labels','error');
