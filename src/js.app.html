@@ -1,5 +1,3 @@
-<!-- js.app.html -->
-<script>
 // Frontend controller for Pantry Order Fulfillment App
 (() => {
   const $ = sel => document.querySelector(sel);
@@ -88,11 +86,10 @@
       const videoEl = $('#scanVideo');
       videoEl.srcObject = stream;
 
-      // ✅ Ensure video actually plays before scanning
-      await videoEl.play().catch(()=>{});
-
       // Auto-scroll when video is ready
-      videoEl.onloadedmetadata = () => scrollAfterLayout(videoEl, 'start');
+      videoEl.onloadedmetadata = () => {
+        scrollAfterLayout(videoEl, 'start');
+      };
 
       $('#cancelScanBtn').onclick = () => {
         stream.getTracks().forEach(t=>t.stop());
@@ -251,16 +248,12 @@
           setMsg(res.message || 'Label creation failed','error');
           return;
         }
+
         setMsg('Labels created!','success');
 
-        // 🔽 Build a direct-download URL (bypasses Drive preview)
-        const directUrl = res.fileId
-          ? `https://drive.google.com/uc?export=download&id=${res.fileId}`
-          : res.url;
-
+        // 🔽 Force true download using blob (works across all Chrome/Android versions)
         try {
-          const response = await fetch(directUrl);
-          if (!response.ok) throw new Error('Network response was not ok');
+          const response = await fetch(res.url, { mode: 'no-cors' });
           const blob = await response.blob();
           const objectUrl = URL.createObjectURL(blob);
 
@@ -268,11 +261,15 @@
           link.href = objectUrl;
           link.download = res.name || 'BagLabels.pdf';
           document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
 
-          setTimeout(() => URL.revokeObjectURL(objectUrl), 5000);
-          console.log('✅ PDF downloaded successfully');
+          // Trigger the download immediately
+          link.click();
+
+          // Clean up after ensuring file is saved
+          setTimeout(() => {
+            URL.revokeObjectURL(objectUrl);
+            document.body.removeChild(link);
+          }, 3000);
         } catch (err) {
           console.error('Download error:', err);
           setMsg('Download failed. Use the link below to access labels.', 'error');
@@ -281,7 +278,7 @@
         // Show backup link + reminder message
         resultDiv.innerHTML = `
           <div class="card">
-            <p><a href="${directUrl}" target="_blank" rel="noopener">Re-open PDF if needed</a></p>
+            <p><a href="${res.url}" target="_blank" rel="noopener">Re-open PDF if needed</a></p>
             <p style="margin-top:.5rem;font-weight:bold">
               Tap the <em>Download notification</em> or open your <em>Downloads</em> list,
               then choose <strong>Labellife → Print</strong>.
@@ -290,6 +287,7 @@
           </div>`;
         $('#nextBtn').onclick = resetUI;
 
+        // Auto-scroll to the instructions
         scrollAfterLayout(resultDiv, 'start');
       })
       .withFailureHandler(err => {
@@ -298,5 +296,5 @@
       })
       .apiGenerateLabels(state.formId, state.count, state.fleaChoice);
   }
+
 })();
-</script>
