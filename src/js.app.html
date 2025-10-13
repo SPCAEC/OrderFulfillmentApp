@@ -239,39 +239,57 @@
 
   // ─── Generate labels ─────────────────────────────────────────
   function generateLabels(){
-    setMsg(spinner('Creating labels…'));
-    resultDiv.innerHTML='';
+  setMsg(spinner('Creating labels…'));
+  resultDiv.innerHTML='';
 
-    google.script.run
-      .withSuccessHandler(res => {
-        if (!res.ok){
-          setMsg(res.message || 'Label creation failed','error');
-          return;
-        }
-        setMsg('Labels created!','success');
-        resultDiv.innerHTML = `
-          <div class="card">
-            <p><a href="${res.url}" target="_blank" rel="noopener">Open PDF for printing</a></p>
-            <button id="nextBtn" class="btn startover" style="margin-top:1rem">Scan Next Form</button>
-          </div>`;
-        $('#nextBtn').onclick = resetUI;
+  google.script.run
+    .withSuccessHandler(async res => {
+      if (!res.ok){
+        setMsg(res.message || 'Label creation failed','error');
+        return;
+      }
+      setMsg('Labels created!','success');
 
-        // Auto-scroll to label result
-        scrollAfterLayout(resultDiv, 'start');
+      // 🔽 Fetch and trigger real file download (no Drive preview)
+      try {
+        const response = await fetch(res.url);
+        const blob = await response.blob();
+        const objectUrl = URL.createObjectURL(blob);
 
-        // 🔽 Auto-trigger download/open
         const link = document.createElement('a');
-        link.href = res.url;
-        link.download = res.name || 'BagLabels.pdf'; // fallback if no name
-        link.target = '_blank';
+        link.href = objectUrl;
+        link.download = res.name || 'BagLabels.pdf';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-      })
-      .withFailureHandler(err => {
-        console.error(err); setMsg('Server error creating labels','error');
-      })
-      .apiGenerateLabels(state.formId, state.count, state.fleaChoice);
+
+        // Clean up memory after a short delay
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 5000);
+      } catch (err) {
+        console.error('Download error:', err);
+        setMsg('Download failed. You can use the link below.', 'error');
+      }
+
+      // Show helpful link and Labellife instructions
+      resultDiv.innerHTML = `
+        <div class="card">
+          <p><a href="${res.url}" target="_blank" rel="noopener">Re-open PDF if needed</a></p>
+          <p style="margin-top:.5rem;font-weight:bold">
+            Tap the <em>Download notification</em> or open your <em>Downloads</em> list,
+            then choose <strong>Labellife → Print</strong>.
+          </p>
+          <button id="nextBtn" class="btn startover" style="margin-top:1rem">Scan Next Form</button>
+        </div>`;
+      $('#nextBtn').onclick = resetUI;
+
+      // Auto-scroll to the instructions
+      scrollAfterLayout(resultDiv, 'start');
+    })
+    .withFailureHandler(err => {
+      console.error(err);
+      setMsg('Server error creating labels','error');
+    })
+    .apiGenerateLabels(state.formId, state.count, state.fleaChoice);
   }
 
 })();
