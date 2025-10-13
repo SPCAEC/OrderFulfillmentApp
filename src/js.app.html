@@ -243,7 +243,7 @@
     resultDiv.innerHTML='';
 
     google.script.run
-      .withSuccessHandler(res => {
+      .withSuccessHandler(async res => {
         if (!res.ok){
           setMsg(res.message || 'Label creation failed','error');
           return;
@@ -251,48 +251,44 @@
 
         setMsg('Labels created!','success');
 
-        // ✅ Build Google Drive direct download URL
-        const fileId = res.fileId;
-        const directUrl = fileId
-          ? `https://drive.google.com/uc?export=download&id=${fileId}`
-          : res.url;
+        // 🔽 Force true download using blob (works across all Chrome/Android versions)
+        try {
+          const response = await fetch(res.url, { mode: 'no-cors' });
+          const blob = await response.blob();
+          const objectUrl = URL.createObjectURL(blob);
 
-        // Show result card first (no immediate network calls here)
+          const link = document.createElement('a');
+          link.href = objectUrl;
+          link.download = res.name || 'BagLabels.pdf';
+          document.body.appendChild(link);
+
+          // Trigger the download immediately
+          link.click();
+
+          // Clean up after ensuring file is saved
+          setTimeout(() => {
+            URL.revokeObjectURL(objectUrl);
+            document.body.removeChild(link);
+          }, 3000);
+        } catch (err) {
+          console.error('Download error:', err);
+          setMsg('Download failed. Use the link below to access labels.', 'error');
+        }
+
+        // Show backup link + reminder message
         resultDiv.innerHTML = `
           <div class="card">
-            <p><strong>Labels are ready!</strong></p>
-            <div class="actions">
-              <button id="downloadBtn" class="btn">⬇️ Download PDF</button>
-              <a href="${directUrl}" target="_blank" rel="noopener" class="btn secondary">Open in New Tab</a>
-            </div>
-            <p style="margin-top:.75rem;font-weight:bold">
-              After download, tap the notification or open your <em>Downloads</em> list,
+            <p><a href="${res.url}" target="_blank" rel="noopener">Re-open PDF if needed</a></p>
+            <p style="margin-top:.5rem;font-weight:bold">
+              Tap the <em>Download notification</em> or open your <em>Downloads</em> list,
               then choose <strong>Labellife → Print</strong>.
             </p>
-            <button id="nextBtn" class="btn startover" style="margin-top:1.25rem">Scan Next Form</button>
+            <button id="nextBtn" class="btn startover" style="margin-top:1rem">Scan Next Form</button>
           </div>`;
-
         $('#nextBtn').onclick = resetUI;
 
-        // Scroll to result
+        // Auto-scroll to the instructions
         scrollAfterLayout(resultDiv, 'start');
-
-        // ✅ Safe, user-gesture download handler
-        $('#downloadBtn').onclick = () => {
-          try {
-            const link = document.createElement('a');
-            link.href = directUrl;
-            link.download = res.name || 'BagLabels.pdf';
-            link.target = '_blank';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            console.log('✅ Download triggered via user gesture');
-          } catch (err) {
-            console.error('Download error:', err);
-            setMsg('Download failed. Try "Open in New Tab".','error');
-          }
-        };
       })
       .withFailureHandler(err => {
         console.error(err);
