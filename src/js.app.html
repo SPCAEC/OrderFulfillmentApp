@@ -248,12 +248,16 @@
           setMsg(res.message || 'Label creation failed','error');
           return;
         }
-
         setMsg('Labels created!','success');
 
-        // 🔽 Force true download using blob (works across all Chrome/Android versions)
+        // 🔽 Build a direct-download URL (bypasses Drive preview)
+        const directUrl = res.fileId
+          ? `https://drive.google.com/uc?export=download&id=${res.fileId}`
+          : res.url;
+
         try {
-          const response = await fetch(res.url, { mode: 'no-cors' });
+          const response = await fetch(directUrl);
+          if (!response.ok) throw new Error('Network response was not ok');
           const blob = await response.blob();
           const objectUrl = URL.createObjectURL(blob);
 
@@ -261,15 +265,11 @@
           link.href = objectUrl;
           link.download = res.name || 'BagLabels.pdf';
           document.body.appendChild(link);
-
-          // Trigger the download immediately
           link.click();
+          document.body.removeChild(link);
 
-          // Clean up after ensuring file is saved
-          setTimeout(() => {
-            URL.revokeObjectURL(objectUrl);
-            document.body.removeChild(link);
-          }, 3000);
+          setTimeout(() => URL.revokeObjectURL(objectUrl), 5000);
+          console.log('✅ PDF downloaded successfully');
         } catch (err) {
           console.error('Download error:', err);
           setMsg('Download failed. Use the link below to access labels.', 'error');
@@ -278,7 +278,7 @@
         // Show backup link + reminder message
         resultDiv.innerHTML = `
           <div class="card">
-            <p><a href="${res.url}" target="_blank" rel="noopener">Re-open PDF if needed</a></p>
+            <p><a href="${directUrl}" target="_blank" rel="noopener">Re-open PDF if needed</a></p>
             <p style="margin-top:.5rem;font-weight:bold">
               Tap the <em>Download notification</em> or open your <em>Downloads</em> list,
               then choose <strong>Labellife → Print</strong>.
@@ -287,7 +287,6 @@
           </div>`;
         $('#nextBtn').onclick = resetUI;
 
-        // Auto-scroll to the instructions
         scrollAfterLayout(resultDiv, 'start');
       })
       .withFailureHandler(err => {
