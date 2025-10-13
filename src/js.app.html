@@ -1,3 +1,5 @@
+<!-- js.app.html -->
+<script>
 // Frontend controller for Pantry Order Fulfillment App
 (() => {
   const $ = sel => document.querySelector(sel);
@@ -86,10 +88,11 @@
       const videoEl = $('#scanVideo');
       videoEl.srcObject = stream;
 
+      // ✅ Ensure video actually plays before scanning
+      await videoEl.play().catch(()=>{});
+
       // Auto-scroll when video is ready
-      videoEl.onloadedmetadata = () => {
-        scrollAfterLayout(videoEl, 'start');
-      };
+      videoEl.onloadedmetadata = () => scrollAfterLayout(videoEl, 'start');
 
       $('#cancelScanBtn').onclick = () => {
         stream.getTracks().forEach(t=>t.stop());
@@ -296,3 +299,4 @@
       .apiGenerateLabels(state.formId, state.count, state.fleaChoice);
   }
 })();
+</script>
