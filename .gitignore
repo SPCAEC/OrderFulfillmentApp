@@ -1,22 +1,25 @@
-# Node / NPM
+# Node / dependencies
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Mac / OS X
+# Local environment files
+.env
+.env.local
+.env.*.local
+
+# OS junk
 .DS_Store
-.AppleDouble
-.LSOverride
+Thumbs.db
 
-# VS Code
-.vscode/
-*.code-workspace
-
-# Google Apps Script
-.clasp.json # ⚠️ keep this OUT of .gitignore if you want it in repo
-# (if you want .clasp.json tracked, comment the line above)
+# Build artifacts
+dist/
+coverage/
 
 # Logs
-*.log
 logs/
+*.log
+
+# Cloud Run / GCP
+.gcloudignore

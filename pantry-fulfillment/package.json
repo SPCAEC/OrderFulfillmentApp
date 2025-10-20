@@ -1,0 +1,14 @@
+{
+  "name": "pantry-fulfillment",
+  "version": "1.0.0",
+  "description": "SPCA Pantry Order Fulfillment backend (Cloud Run)",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "googleapis": "^144.0.0",
+    "axios": "^1.7.0"
+  }
+}
