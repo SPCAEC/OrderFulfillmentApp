@@ -1,15 +1,27 @@
 import express from 'express';
 import { google } from 'googleapis';
 import { GoogleAuth } from 'google-auth-library';
+import lookupRoute from './routes/lookup.js'; // new route file
 
 const app = express();
 
-// Optional basic route
+// Middleware
+app.use(express.json()); // enables JSON parsing for POST bodies
+
+// ──────────────────────────────────────────────
+//  Base health route
+// ──────────────────────────────────────────────
 app.get('/', (req, res) => {
-  res.json({ status: 'ok', service: 'order-fulfillment' });
+  res.json({
+    status: 'ok',
+    service: 'order-fulfillment',
+    version: '1.0.0'
+  });
 });
 
-// Google Sheets test route
+// ──────────────────────────────────────────────
+//  Google Sheets Test Route
+// ──────────────────────────────────────────────
 app.get('/test-sheets', async (req, res) => {
   try {
     const creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
@@ -19,8 +31,7 @@ app.get('/test-sheets', async (req, res) => {
     });
     const sheets = google.sheets({ version: 'v4', auth });
 
-    // Replace this with your real Pantry sheet ID
-    const testSheetId = '1JrfUHDAPMCIvOSknKoN3vVR6KQZTKUaNLpsRru7cekU';
+    const testSheetId = '1JrfUHDAPMCIvOSknKoN3vVR6KQZTKUaNLpsRru7cekU'; // Pantry Sheet
     const sheet = await sheets.spreadsheets.values.get({
       spreadsheetId: testSheetId,
       range: 'A1:D5'
@@ -28,12 +39,19 @@ app.get('/test-sheets', async (req, res) => {
 
     res.json(sheet.data);
   } catch (err) {
-    console.error(err);
+    console.error('❌ Error in /test-sheets:', err);
     res.status(500).json({ error: err.message });
   }
 });
 
-// Cloud Run requires listening on process.env.PORT
+// ──────────────────────────────────────────────
+//  API: Lookup Route
+// ──────────────────────────────────────────────
+app.use('/lookup', lookupRoute);
+
+// ──────────────────────────────────────────────
+//  Start server (required for Cloud Run)
+// ──────────────────────────────────────────────
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log(`✅ Server listening on port ${PORT}`);
