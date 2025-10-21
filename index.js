@@ -1,9 +1,8 @@
 import express from 'express';
 import { google } from 'googleapis';
 import { GoogleAuth } from 'google-auth-library';
-import lookupRoute from './routes/lookup.js'; // new route file
+import lookupRoute from './routes/lookup.js';
 import generateLabelsRoute from './routes/generateLabels.js';
-app.use('/generate-labels', express.json(), generateLabelsRoute);
 
 const app = express();
 
@@ -47,9 +46,10 @@ app.get('/test-sheets', async (req, res) => {
 });
 
 // ──────────────────────────────────────────────
-//  API: Lookup Route
+//  Routes
 // ──────────────────────────────────────────────
 app.use('/lookup', lookupRoute);
+app.use('/generate-labels', generateLabelsRoute);
 
 // ──────────────────────────────────────────────
 //  Start server (required for Cloud Run)
