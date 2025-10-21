@@ -3,6 +3,7 @@ import { PDFDocument, StandardFonts } from 'pdf-lib';
 import axios from 'axios';
 import { google } from 'googleapis';
 import { GoogleAuth } from 'google-auth-library';
+import { Readable } from 'stream'; // add this at top of file
 
 // ---- CONFIG ----
 const LOGO_URL =
@@ -88,13 +89,15 @@ export async function generateAndUploadLabel({
     const drive = google.drive({ version: 'v3', auth });
 
     const fileName = `BagLabel_${lastName || 'Last'}_${formId}.pdf`;
+    const stream = Readable.from(pdfBytes);
+
     const fileRes = await drive.files.create({
       requestBody: {
         name: fileName,
         mimeType: 'application/pdf',
         parents: [OUTPUT_FOLDER_ID],
       },
-      media: { mimeType: 'application/pdf', body: Buffer.from(pdfBytes) },
+      media: { mimeType: 'application/pdf', body: stream },
       fields: 'id, webViewLink, webContentLink',
     });
 
