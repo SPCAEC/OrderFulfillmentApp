@@ -99,7 +99,7 @@ export async function generateAndUploadLabel({
 
     // ✅ FIXED: ensure pdfBytes is a proper Buffer stream
     const buffer = Buffer.from(new Uint8Array(pdfBytes));
-    const stream = Readable.from(buffer);
+    const stream = Readable.from([Buffer.from(pdfBytes)]);
 
     const fileRes = await drive.files.create({
       requestBody: {
