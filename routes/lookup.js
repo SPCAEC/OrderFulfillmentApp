@@ -19,7 +19,7 @@ router.post('/', async (req, res) => {
     if (!formId) throw new Error('Missing formId');
 
     const sheetId = '1XK2ENcMEi-MYeRY6gzGf1aRR8v9mEDuHZx6s_slm8ZE';
-    const range = 'FormResponses!A:Z'; // adjust to your real tab name
+    const range = 'Form Responses 1!A:Z'; // adjust to your real tab name
 
     const resp = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,
