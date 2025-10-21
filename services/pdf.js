@@ -1,16 +1,24 @@
 // services/pdf.js
+// -----------------------------------------------------------------------------
+// Generates 4x6 “Pet Food Pantry Pickup” bag labels and uploads PDFs to Drive.
+// -----------------------------------------------------------------------------
+
 import { PDFDocument, StandardFonts } from 'pdf-lib';
 import axios from 'axios';
 import { google } from 'googleapis';
 import { GoogleAuth } from 'google-auth-library';
-import { Readable } from 'stream'; // add this at top of file
+import { Readable } from 'stream';
 
-// ---- CONFIG ----
+// ──────────────────────────────────────────────
+// CONFIG
+// ──────────────────────────────────────────────
 const LOGO_URL =
   'https://drive.google.com/uc?export=download&id=1QdKdMM-VHas0xgrCFpP_cITMn2ZZx7hY';
-const OUTPUT_FOLDER_ID = '1wGhhU3XulZVW8JzO1AUlq0L3XHNVGG-b'; // <- update to your Pantry Labels folder
+const OUTPUT_FOLDER_ID = '1wGhhU3XulZVW8JzO1AUlq0L3XHNVGG-b'; // Pantry label folder ID
 
-// ---- MAIN GENERATOR ----
+// ──────────────────────────────────────────────
+// MAIN GENERATOR
+// ──────────────────────────────────────────────
 export async function generateAndUploadLabel({
   firstName,
   lastName,
@@ -41,20 +49,17 @@ export async function generateAndUploadLabel({
         )
         .then(r => r.data),
     ]);
+
     const logo = await doc.embedPng(logoBytes);
     const barcode = await doc.embedPng(barcodeBytes);
 
-    // 3️⃣  Layout
+    // 3️⃣  Layout and text blocks
+    // Logo and heading
     page.drawImage(logo, { x: 25, y: height - 120, width: 95, height: 95 });
-
     page.drawText('Pet Food', { x: 140, y: height - 40, size: 16, font: bold });
-    page.drawText('Pantry Pickup', {
-      x: 140,
-      y: height - 60,
-      size: 16,
-      font: bold,
-    });
+    page.drawText('Pantry Pickup', { x: 140, y: height - 60, size: 16, font: bold });
 
+    // Disclaimer
     const disclaimer =
       'These items have been provided as a good-faith effort to assist during a temporary need or crisis. The SPCA is not legally liable for the distribution, use, or consumption of these items. Items not picked up within 7 days of the date below will be repurposed for other clients.';
     drawWrappedText(page, disclaimer, {
@@ -66,6 +71,7 @@ export async function generateAndUploadLabel({
       lineHeight: 9,
     });
 
+    // Body content
     let y = 250;
     const nameText = `${firstName?.charAt(0) || ''} ${lastName || ''}`;
     page.drawText(`Name: ${nameText}`, { x: 40, y, size: 16, font: bold });
@@ -76,11 +82,12 @@ export async function generateAndUploadLabel({
     y -= 40;
     page.drawText(`Pickup Window: ${pickupWindow}`, { x: 30, y, size: 12, font });
 
+    // Barcode
     page.drawImage(barcode, { x: 20, y: 25, width: 250, height: 60 });
 
+    // 4️⃣  Save and upload to Drive
     const pdfBytes = await doc.save();
 
-    // 4️⃣  Upload to Drive
     const creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
     const auth = new GoogleAuth({
       credentials: creds,
@@ -88,8 +95,11 @@ export async function generateAndUploadLabel({
     });
     const drive = google.drive({ version: 'v3', auth });
 
-    const fileName = `BagLabel_${lastName || 'Last'}_${formId}.pdf`;
-    const stream = Readable.from(pdfBytes);
+    const fileName = `BagLabel_${lastName || 'Last'}_${formId}_${index}of${total}.pdf`;
+
+    // ✅ FIXED: ensure pdfBytes is a proper Buffer stream
+    const buffer = Buffer.from(new Uint8Array(pdfBytes));
+    const stream = Readable.from(buffer);
 
     const fileRes = await drive.files.create({
       requestBody: {
@@ -107,12 +117,14 @@ export async function generateAndUploadLabel({
       url: fileRes.data.webViewLink || fileRes.data.webContentLink,
     };
   } catch (err) {
-    console.error('PDF generation failed:', err);
+    console.error('❌ PDF generation failed:', err);
     return { ok: false, error: err.message };
   }
 }
 
-// ---- HELPERS ----
+// ──────────────────────────────────────────────
+// HELPERS
+// ──────────────────────────────────────────────
 function drawWrappedText(page, text, { x, y, width, font, size, lineHeight }) {
   const words = text.split(' ');
   let line = '';
@@ -124,7 +136,9 @@ function drawWrappedText(page, text, { x, y, width, font, size, lineHeight }) {
       page.drawText(line.trim(), { x, y: cursorY, size, font });
       line = w + ' ';
       cursorY -= lineHeight;
-    } else line = testLine;
+    } else {
+      line = testLine;
+    }
   }
   if (line) page.drawText(line.trim(), { x, y: cursorY, size, font });
 }
