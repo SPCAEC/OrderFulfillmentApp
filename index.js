@@ -2,6 +2,8 @@ import express from 'express';
 import { google } from 'googleapis';
 import { GoogleAuth } from 'google-auth-library';
 import lookupRoute from './routes/lookup.js'; // new route file
+import generateLabelsRoute from './routes/generateLabels.js';
+app.use('/generate-labels', express.json(), generateLabelsRoute);
 
 const app = express();
 
