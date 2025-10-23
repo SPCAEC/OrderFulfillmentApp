@@ -13,7 +13,7 @@ import { GoogleAuth } from 'google-auth-library';
 const router = express.Router();
 
 // ---- Config ----
-const OUTPUT_FOLDER_ID = '1wGhhU3XulZVW8JzO1AUlq0L3XHNVGG-b'; // Pantry Labels folder
+const OUTPUT_FOLDER_ID = '1LslhtWlSpmp-zQgqlpafaHVt7JsYTFdH'; // Pantry Labels folder
 
 // Utility logger for Cloud Run
 function logStep(label, data = null) {
