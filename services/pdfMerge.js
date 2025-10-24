@@ -1,36 +1,23 @@
 // services/pdfMerge.js
 // -----------------------------------------------------------------------------
 // Combines multiple PDF files (by Drive ID) into a single PDF via external merge service.
-// Fully Shared Drive compatible and supports Cloud Run secret or inline JSON credentials.
+// Uses base64 payloads (no public links) and uploads final merged file
+// to a separate "Merged Labels" folder.
 // -----------------------------------------------------------------------------
 
-import fs from 'fs';
 import axios from 'axios';
 import { google } from 'googleapis';
 import { GoogleAuth } from 'google-auth-library';
 
 const MERGE_SERVICE_URL = 'https://pdf-merge-service.onrender.com/merge';
-const DRIVE_ID = '0AJz8fOdNJhtRUk9PVA'; // ✅ Shared Drive ID
+const DRIVE_ID = '0AJz8fOdNJhtRUk9PVA'; // Shared Drive ID
+const MERGED_FOLDER_ID = '11KEmLmCPEuJNArjkXSD-hYcYPG6Do5s7'; // ✅ Final merged PDF folder
 
-// Simple timestamped logger
-function logStep(label, data = null) {
-  const now = new Date().toISOString();
-  if (data) console.log(`🕓 [${now}] ${label}`, data);
-  else console.log(`🕓 [${now}] ${label}`);
-}
-
-// 🔧 Helper: Authenticated Drive client (supports secret file path)
+// ──────────────────────────────────────────────
+// Helper: Authenticated Drive client
+// ──────────────────────────────────────────────
 async function getDriveClient() {
-  let creds;
-  if (process.env.GOOGLE_SERVICE_ACCOUNT?.startsWith?.('/')) {
-    const path = process.env.GOOGLE_SERVICE_ACCOUNT;
-    logStep('🔑 Reading creds from file', path);
-    creds = JSON.parse(fs.readFileSync(path, 'utf8'));
-  } else {
-    logStep('🔑 Reading creds from env var');
-    creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
-  }
-
+  const creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
   const auth = new GoogleAuth({
     credentials: creds,
     scopes: ['https://www.googleapis.com/auth/drive.file'],
@@ -38,54 +25,61 @@ async function getDriveClient() {
   return google.drive({ version: 'v3', auth });
 }
 
-// -----------------------------------------------------------------------------
+// ──────────────────────────────────────────────
+// Helper: Download a Drive file as Base64
+// ──────────────────────────────────────────────
+async function downloadFileAsBase64(drive, fileId) {
+  const res = await drive.files.get(
+    { fileId, alt: 'media', supportsAllDrives: true },
+    { responseType: 'arraybuffer' }
+  );
+  const buffer = Buffer.from(res.data);
+  return buffer.toString('base64');
+}
+
+// ──────────────────────────────────────────────
 // MAIN: mergeAndUpload
 // -----------------------------------------------------------------------------
-export async function mergeAndUpload({ fileIds, outputName, outputFolderId }) {
+export async function mergeAndUpload({ fileIds, outputName }) {
   if (!Array.isArray(fileIds) || fileIds.length === 0)
     return { ok: false, error: 'No file IDs provided for merge.' };
 
+  console.log(`📦 mergeAndUpload: starting merge for ${fileIds.length} files`);
+
   try {
     const drive = await getDriveClient();
-    logStep('📂 Starting mergeAndUpload', { count: fileIds.length, outputName });
 
-    // 1️⃣  Get downloadable URLs for each file
-    const urls = [];
+    // 1️⃣ Download each file as base64
+    const pdfs = [];
     for (const id of fileIds) {
       try {
-        const res = await drive.files.get({
-          fileId: id,
-          fields: 'id, name, webContentLink',
-          supportsAllDrives: true,
-        });
-        if (res.data.webContentLink) {
-          urls.push(res.data.webContentLink);
-          logStep(`✅ Got webContentLink for ${res.data.name}`, res.data.id);
-        } else {
-          throw new Error(`No webContentLink for file ${id}`);
-        }
+        console.log(`⬇️ Downloading file ${id} from Drive...`);
+        const base64 = await downloadFileAsBase64(drive, id);
+        pdfs.push(base64);
+        console.log(`✅ File ${id} downloaded (${base64.length} base64 chars)`);
       } catch (err) {
-        console.error(`⚠️ Failed to get webContentLink for ${id}:`, err.message);
+        console.error(`❌ Failed to download ${id}:`, err.message);
       }
     }
 
-    if (urls.length === 0)
-      return { ok: false, error: 'No valid file URLs retrieved from Drive.' };
+    if (pdfs.length === 0)
+      throw new Error('No PDFs could be downloaded from Drive.');
 
-    logStep('🔗 File URLs ready', urls);
+    // 2️⃣ Call external merge service with base64 data
+    console.log(`🔗 Sending ${pdfs.length} PDF(s) to merge service...`);
+    const mergeRes = await axios.post(
+      MERGE_SERVICE_URL,
+      { pdfs },
+      { responseType: 'arraybuffer' }
+    );
+    console.log(`✅ Merge service returned ${mergeRes.data.byteLength} bytes`);
 
-    // 2️⃣  Call external merge service
-    logStep('🌀 Sending files to merge service...');
-    const mergeRes = await axios.post(MERGE_SERVICE_URL, { urls }, { responseType: 'arraybuffer' });
-    logStep('✅ Merge service returned data', { bytes: mergeRes.data?.byteLength });
-
-    // 3️⃣  Upload merged result to Drive (shared drive)
-    logStep('📤 Uploading merged PDF...');
+    // 3️⃣ Upload merged result to Drive (separate folder)
     const fileRes = await drive.files.create({
       requestBody: {
         name: outputName,
         mimeType: 'application/pdf',
-        parents: [outputFolderId],
+        parents: [MERGED_FOLDER_ID],
         driveId: DRIVE_ID,
       },
       media: {
@@ -96,13 +90,13 @@ export async function mergeAndUpload({ fileIds, outputName, outputFolderId }) {
       fields: 'id, name, webViewLink, webContentLink',
     });
 
-    logStep('✅ Merged PDF uploaded', fileRes.data);
+    console.log(`✅ Merged PDF uploaded: ${fileRes.data.id}`);
 
-    // 4️⃣  Clean up temp files
+    // 4️⃣ Optional cleanup — remove temp label PDFs
     for (const id of fileIds) {
       try {
         await drive.files.delete({ fileId: id, supportsAllDrives: true });
-        logStep(`🗑️ Deleted temp file ${id}`);
+        console.log(`🗑️ Deleted temp file ${id}`);
       } catch (err) {
         console.warn(`⚠️ Could not delete temp file ${id}: ${err.message}`);
       }
