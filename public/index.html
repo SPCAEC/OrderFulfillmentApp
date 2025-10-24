@@ -1,108 +1,138 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Pantry Order Fulfillment</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="stylesheet" href="/css/style.css" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SPCA Order Fulfillment</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div class="app">
-
-    <header class="app-header">
-      <img class="logo" src="https://drive.google.com/uc?export=download&id=1QdKdMM-VHas0xgrCFpP_cITMn2ZZx7hY" alt="SPCA Logo"/>
-      <div>
-        <h1>Order Fulfillment</h1>
-        <p class="muted">Scan a barcode or enter a 12-digit Form ID</p>
-      </div>
+    <header>
+      <img
+        src="https://drive.google.com/uc?export=view&id=1QdKdMM-VHas0xgrCFpP_cITMn2ZZx7hY"
+        alt="SPCA Logo"
+      />
+      <h1>Order Fulfillment</h1>
     </header>
 
-    <!-- Section: Scanner / Manual Entry -->
-    <section class="card" id="scan-section">
-      <div class="card-head">
-        <h2>Lookup</h2>
-        <div class="controls">
-          <button id="btnStartCam" class="btn">Start Camera</button>
-          <button id="btnStopCam" class="btn btn-ghost">Stop</button>
-        </div>
+    <p class="desc">Scan a barcode or enter a 12-digit Form ID</p>
+
+    <div class="card">
+      <h2>Lookup</h2>
+
+      <div class="preview" id="previewContainer">
+        <video id="cameraPreview" autoplay playsinline></video>
+        <button class="btn secondary" id="stopBtn">Cancel</button>
       </div>
 
-      <div class="scanner">
-        <video id="video" playsinline></video>
-        <canvas id="canvas" class="hidden"></canvas>
+      <button class="btn primary" id="startScanBtn">📷 Scan Barcode</button>
+
+      <div class="input-row">
+        <input id="formIdInput" placeholder="XXXXXXXXXXXX" maxlength="12" />
+        <button class="btn primary" id="lookupBtn">Lookup</button>
       </div>
 
-      <div class="manual-entry">
-        <label for="formIdInput">Form ID</label>
-        <div class="row">
-          <input id="formIdInput" inputmode="numeric" maxlength="12" placeholder="XXXXXXXXXXXX" />
-          <button id="btnLookup" class="btn">Lookup</button>
-        </div>
-      </div>
-
-      <p id="scanHelp" class="muted small">
+      <small class="tip">
         Tip: If your device doesn’t support barcode scanning, enter the Form ID above.
-      </p>
-    </section>
-
-    <!-- Section: Result -->
-    <section class="card" id="result-section" hidden>
-      <div class="card-head">
-        <h2>Order</h2>
-        <button id="btnClear" class="btn btn-ghost">Clear</button>
-      </div>
-
-      <div id="orderSummary" class="summary"></div>
-
-      <!-- Puppy/Kitten Reminder (computed from alerts) -->
-      <div id="puppyKittenAlert" class="alert info" hidden>
-        🐾 Puppy/Kitten noted on order. Remember to include appropriate food.
-      </div>
-
-      <!-- Flea/Tick flow -->
-      <div class="card-sub">
-        <h3>Flea / Tick Prevention</h3>
-        <div class="row">
-          <label class="chk"><input type="checkbox" id="chkFleaRequested" /> Client requested prevention</label>
-          <label class="chk"><input type="checkbox" id="chkFleaProvided" /> Provided today</label>
-        </div>
-      </div>
-
-      <!-- Label Count -->
-      <div class="card-sub">
-        <h3>How many labels?</h3>
-        <div class="row">
-          <input id="labelCount" type="number" min="1" max="5" value="2" />
-          <button id="btnGenerate" class="btn primary">Create Labels</button>
-        </div>
-        <p class="muted small">Up to 5 per order.</p>
-      </div>
-    </section>
-
-    <!-- Section: Activity -->
-    <section class="card" id="activity-section" hidden>
-      <div class="card-head">
-        <h2>Status</h2>
-      </div>
-      <div id="activity" class="activity"></div>
-    </section>
-
+      </small>
+    </div>
   </div>
 
-  <!-- Confirmation Modal -->
-  <dialog id="confirmModal">
-    <form method="dialog" class="modal">
-      <h3>Print & Notify?</h3>
-      <p class="muted">
-        Printing labels will notify the client that their order is ready. Proceed?
+  <!-- Modal -->
+  <div class="modal-backdrop" id="modalBackdrop">
+    <div class="modal">
+      <h2>Confirm Label Printing</h2>
+      <p>
+        Printing these labels will also notify the client that their order is
+        ready for pickup.
       </p>
-      <div class="modal-actions">
-        <button value="cancel" class="btn btn-ghost">Cancel</button>
-        <button value="confirm" class="btn primary">Yes, Print</button>
+      <div class="actions">
+        <button class="btn secondary" id="cancelModalBtn">Cancel</button>
+        <button class="btn primary" id="confirmModalBtn">Print Labels</button>
       </div>
-    </form>
-  </dialog>
+    </div>
+  </div>
 
-  <script src="/js/app.js" type="module"></script>
+  <script>
+    const startScanBtn = document.getElementById("startScanBtn");
+    const stopBtn = document.getElementById("stopBtn");
+    const previewContainer = document.getElementById("previewContainer");
+    const video = document.getElementById("cameraPreview");
+    const formIdInput = document.getElementById("formIdInput");
+    const lookupBtn = document.getElementById("lookupBtn");
+    const modalBackdrop = document.getElementById("modalBackdrop");
+    const cancelModalBtn = document.getElementById("cancelModalBtn");
+    const confirmModalBtn = document.getElementById("confirmModalBtn");
+
+    let stream = null;
+    let barcodeDetector;
+
+    if ("BarcodeDetector" in window) {
+      barcodeDetector = new BarcodeDetector({ formats: ["code_128", "ean_13"] });
+    } else {
+      alert("BarcodeDetector API not supported in this browser.");
+    }
+
+    async function startCamera() {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" },
+        });
+        video.srcObject = stream;
+        previewContainer.style.display = "block";
+        startScanBtn.style.display = "none";
+        scanLoop();
+      } catch (err) {
+        alert("Camera access denied or not available.");
+        console.error(err);
+      }
+    }
+
+    function stopCamera() {
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+        stream = null;
+      }
+      previewContainer.style.display = "none";
+      startScanBtn.style.display = "inline-block";
+    }
+
+    async function scanLoop() {
+      if (!barcodeDetector || !stream) return;
+      try {
+        const result = await barcodeDetector.detect(video);
+        if (result.length > 0) {
+          const code = result[0].rawValue;
+          console.log("Detected barcode:", code);
+          stopCamera();
+          formIdInput.value = code;
+          openModal();
+        }
+      } catch (e) {
+        console.warn("Scan error", e);
+      }
+      if (stream) requestAnimationFrame(scanLoop);
+    }
+
+    function openModal() {
+      modalBackdrop.style.display = "flex";
+    }
+
+    function closeModal() {
+      modalBackdrop.style.display = "none";
+    }
+
+    startScanBtn.addEventListener("click", startCamera);
+    stopBtn.addEventListener("click", stopCamera);
+    lookupBtn.addEventListener("click", openModal);
+    cancelModalBtn.addEventListener("click", closeModal);
+
+    confirmModalBtn.addEventListener("click", () => {
+      closeModal();
+      alert("Labels are being generated and the client will be notified.");
+      // TODO: Integrate actual POST /generate-labels call here
+    });
+  </script>
 </body>
 </html>
