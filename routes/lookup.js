@@ -59,7 +59,7 @@ router.post('/', async (req, res) => {
     // Pull values
     const resp = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${title}!A:Z`,
+      range: title,
       valueRenderOption: 'UNFORMATTED_VALUE',
       dateTimeRenderOption: 'FORMATTED_STRING',
     });
