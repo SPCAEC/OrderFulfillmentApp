@@ -49,50 +49,45 @@ export async function mergeAndUpload({ fileIds, outputName }) {
   try {
     const drive = await getDriveClient();
 
-    // 1️⃣ Download each file as base64
-    const pdfs = [];
-    for (const id of fileIds) {
-      try {
-        console.log(`⬇️ Downloading file ${id} from Drive...`);
-        const base64 = await downloadFileAsBase64(drive, id);
-        pdfs.push(base64);
-        console.log(`✅ File ${id} downloaded (${base64.length} base64 chars)`);
-      } catch (err) {
-        console.error(`❌ Failed to download ${id}:`, err.message);
-      }
-    }
+    // 1️⃣  Download each file as base64
+    const pdfs = await Promise.all(
+      fileIds.map(async id => {
+        const res = await drive.files.get(
+          { fileId: id, alt: 'media' },
+          { responseType: 'arraybuffer' }
+        );
+        const base64 = Buffer.from(res.data).toString('base64');
+        return base64;
+      })
+    );
 
-    if (pdfs.length === 0)
-      throw new Error('No PDFs could be downloaded from Drive.');
+    // 2️⃣  Call external merge service (now sending base64 PDFs)
+    const mergeRes = await axios.post(
+      MERGE_SERVICE_URL,
+      { pdfs },
+      { responseType: 'arraybuffer' }
+    );
 
-    // 2️⃣ Call external merge service with base64 data
-    console.log('📡 Calling merge service:', MERGE_SERVICE_URL, 'with', urls.length, 'files');
-    const mergeRes = await axios.post(MERGE_SERVICE_URL, { urls }, { responseType: 'arraybuffer' });
-    console.log('✅ Merge service response received:', mergeRes.status, mergeRes.headers['content-type']);
-
-    // 3️⃣ Upload merged result to Drive (separate folder)
+    // 3️⃣  Upload merged result to the Merged Labels folder
     const fileRes = await drive.files.create({
       requestBody: {
         name: outputName,
         mimeType: 'application/pdf',
-        parents: [MERGED_FOLDER_ID],
-        driveId: DRIVE_ID,
+        parents: [outputFolderId],
+        driveId: '0AJz8fOdNJhtRUk9PVA'
       },
       media: {
         mimeType: 'application/pdf',
-        body: Buffer.from(mergeRes.data),
+        body: Buffer.from(mergeRes.data)
       },
       supportsAllDrives: true,
-      fields: 'id, name, webViewLink, webContentLink',
+      fields: 'id, webViewLink, webContentLink'
     });
 
-    console.log(`✅ Merged PDF uploaded: ${fileRes.data.id}`);
-
-    // 4️⃣ Optional cleanup — remove temp label PDFs
+    // 4️⃣  Clean up (optional)
     for (const id of fileIds) {
       try {
         await drive.files.delete({ fileId: id, supportsAllDrives: true });
-        console.log(`🗑️ Deleted temp file ${id}`);
       } catch (err) {
         console.warn(`⚠️ Could not delete temp file ${id}: ${err.message}`);
       }
@@ -102,10 +97,10 @@ export async function mergeAndUpload({ fileIds, outputName }) {
       ok: true,
       fileId: fileRes.data.id,
       url: fileRes.data.webViewLink || fileRes.data.webContentLink,
-      count: fileIds.length,
+      count: fileIds.length
     };
   } catch (err) {
     console.error('❌ mergeAndUpload failed:', err);
-    return { ok: false, error: err.message, stack: err.stack };
+    return { ok: false, error: err.message };
   }
 }
