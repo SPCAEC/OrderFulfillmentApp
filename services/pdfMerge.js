@@ -15,7 +15,10 @@ async function getDriveClient() {
   const creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
   const auth = new GoogleAuth({
     credentials: creds,
-    scopes: ['https://www.googleapis.com/auth/drive.readonly', 'https://www.googleapis.com/auth/drive.file'],
+    scopes: [
+      'https://www.googleapis.com/auth/drive.readonly',
+      'https://www.googleapis.com/auth/drive.file',
+    ],
   });
   return google.drive({ version: 'v3', auth });
 }
@@ -33,27 +36,36 @@ export async function mergeAndUpload({ fileIds, outputName, outputFolderId }) {
 
     const drive = await getDriveClient();
 
-    // 1️⃣ Download PDFs as base64
-    const pdfBuffers = await Promise.all(
-      fileIds.map(async (id) => {
+    // 1️⃣ Download PDFs and encode to base64
+    const base64Files = await Promise.all(
+      fileIds.map(async (id, i) => {
         const res = await drive.files.get(
           { fileId: id, alt: 'media', supportsAllDrives: true },
           { responseType: 'arraybuffer' }
         );
         console.log(`📥 Downloaded file ${id} (${res.data.byteLength} bytes)`);
-        return Buffer.from(res.data).toString('base64');
+        return {
+          name: `label_${i + 1}.pdf`,
+          content: Buffer.from(res.data).toString('base64'),
+        };
       })
     );
 
-    // 2️⃣ Merge via external service
+    // 2️⃣ Merge via external Render service
     console.log('📡 Sending to merge service...');
     const mergeRes = await axios.post(
       MERGE_SERVICE_URL,
-      { files: pdfBuffers },
+      { files: base64Files },
       { responseType: 'arraybuffer' }
     );
 
-    console.log('✅ Merge completed:', mergeRes.status, '–', mergeRes.data.byteLength, 'bytes');
+    console.log(
+      '✅ Merge completed:',
+      mergeRes.status,
+      '–',
+      mergeRes.data.byteLength,
+      'bytes'
+    );
 
     // 3️⃣ Upload merged PDF back to Drive
     const pdfStream = Readable.from(Buffer.from(mergeRes.data));
@@ -71,7 +83,7 @@ export async function mergeAndUpload({ fileIds, outputName, outputFolderId }) {
 
     console.log('✅ Merged file uploaded:', driveUpload.data);
 
-    // 4️⃣ Clean up originals
+    // 4️⃣ Clean up temporary label files
     for (const id of fileIds) {
       try {
         await drive.files.delete({ fileId: id, supportsAllDrives: true });

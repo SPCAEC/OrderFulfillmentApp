@@ -1,52 +1,65 @@
-// ------- CONFIG -------
+// ──────────────────────────────────────────────
+// CONFIG
+// ──────────────────────────────────────────────
 const API_BASE = 'https://orderfulfillmentapp-580236127675.northamerica-northeast2.run.app';
 
-// ------- DOM -------
+// ──────────────────────────────────────────────
+// DOM ELEMENTS
+// ──────────────────────────────────────────────
 const els = {
+  cameraContainer: document.getElementById('cameraContainer'),
   video: document.getElementById('video'),
   btnStartCam: document.getElementById('btnStartCam'),
   btnStopCam: document.getElementById('btnStopCam'),
+
   formIdInput: document.getElementById('formIdInput'),
   btnLookup: document.getElementById('btnLookup'),
+
   resultSection: document.getElementById('result-section'),
   orderSummary: document.getElementById('orderSummary'),
+
   labelPrompt: document.getElementById('labelPrompt'),
   labelCount: document.getElementById('labelCount'),
   btnContinue: document.getElementById('btnContinue'),
   btnGenerate: document.getElementById('btnGenerate'),
+
   puppyKittenAlert: document.getElementById('puppyKittenAlert'),
   chkFleaRequested: document.getElementById('chkFleaRequested'),
   chkFleaProvided: document.getElementById('chkFleaProvided'),
+
   confirmModal: document.getElementById('confirmModal'),
+
   activitySection: document.getElementById('activity-section'),
   activity: document.getElementById('activity'),
-  btnClear: document.getElementById('btnClear')
+  btnClear: document.getElementById('btnClear'),
 };
 
-// ------- STATE -------
+// ──────────────────────────────────────────────
+// STATE
+// ──────────────────────────────────────────────
 let mediaStream = null;
 let scanLoop = null;
 let lastDetected = '';
 let currentOrder = null;
 
-// ------- UTIL -------
+// ──────────────────────────────────────────────
+// UTILITIES
+// ──────────────────────────────────────────────
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 function scrollIntoView(el) { el?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+function sanitizeFormId(s) { return String(s || '').replace(/\D+/g, '').slice(0, 12); }
+function setVisible(el, visible) { el.hidden = !visible; if (visible) scrollIntoView(el); }
+
 function logLine(kind, msg) {
   const line = document.createElement('div');
   line.className = `line ${kind || ''}`;
   line.innerHTML = `<span class="dot"></span><span>${msg}</span>`;
   els.activity.appendChild(line);
 }
-function setVisible(el, visible) {
-  el.hidden = !visible;
-  if (visible) scrollIntoView(el);
-}
-function sanitizeFormId(s) {
-  return String(s || '').replace(/\D+/g, '').slice(0, 12);
-}
 
-// ------- LOOKUP -------
+// ──────────────────────────────────────────────
+// LOOKUP LOGIC
+// ──────────────────────────────────────────────
 async function lookup(formId) {
   logLine('', `Looking up order ${formId}…`);
   const res = await fetch(`${API_BASE}/lookup`, {
@@ -68,19 +81,21 @@ function renderSummary(data) {
   `;
 }
 
-// ------- CAMERA / BARCODE -------
+// ──────────────────────────────────────────────
+// CAMERA + BARCODE
+// ──────────────────────────────────────────────
 async function startCamera() {
   if (!('BarcodeDetector' in window)) {
-    alert('BarcodeDetector not supported on this device. Use manual entry instead.');
+    alert('BarcodeDetector not supported on this device. Use manual entry.');
     return;
   }
+
   try {
     mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
     els.video.srcObject = mediaStream;
+    els.cameraContainer.hidden = false;
+    els.btnStartCam.hidden = true;
     await els.video.play();
-    els.video.hidden = false;
-    els.btnStartCam.style.display = 'none';
-    els.btnStopCam.style.display = 'inline-block';
 
     const detector = new BarcodeDetector({ formats: ['code_128', 'ean_13', 'upc_a', 'upc_e'] });
 
@@ -93,18 +108,19 @@ async function startCamera() {
           const digits = sanitizeFormId(raw);
           if (digits.length === 12 && digits !== lastDetected) {
             lastDetected = digits;
-            els.formIdInput.value = digits;
             stopCamera();
+            els.formIdInput.value = digits;
             await handleLookup();
             return;
           }
         }
-      } catch { /* ignore frame */ }
+      } catch { /* ignore single-frame errors */ }
       requestAnimationFrame(loop);
     })();
+
   } catch (err) {
     console.error('Camera error:', err);
-    alert('Camera unavailable. Try manual entry.');
+    alert('Camera unavailable. Please use manual entry.');
   }
 }
 
@@ -113,17 +129,19 @@ function stopCamera() {
     mediaStream.getTracks().forEach(t => t.stop());
     mediaStream = null;
   }
-  els.video.hidden = true;
-  els.btnStopCam.style.display = 'none';
-  els.btnStartCam.style.display = 'inline-block';
+  els.cameraContainer.hidden = true;
+  els.btnStartCam.hidden = false;
   lastDetected = '';
 }
 
-// ------- FLOW HANDLERS -------
+// ──────────────────────────────────────────────
+// FLOW CONTROL
+// ──────────────────────────────────────────────
 async function handleLookup() {
   try {
     const formId = sanitizeFormId(els.formIdInput.value);
     if (formId.length !== 12) return alert('Form ID must be 12 digits.');
+
     els.activity.innerHTML = '';
     setVisible(els.activitySection, true);
     logLine('', 'Starting lookup…');
@@ -138,13 +156,13 @@ async function handleLookup() {
     const hasPuppyKitten = alerts.some(a => /puppy|kitten/i.test(a));
     els.puppyKittenAlert.hidden = !hasPuppyKitten;
 
-    // Flea service checkboxes
+    // Flea/tick checkboxes
     const services = data.additionalServices || [];
     const fleaRequested = services.some(s => /flea/i.test(s));
     els.chkFleaRequested.checked = fleaRequested;
     els.chkFleaProvided.checked = false;
 
-    // Move to label count step
+    // Show label count step
     setVisible(els.labelPrompt, true);
     scrollIntoView(els.labelPrompt);
     logLine('ok', 'Lookup complete.');
@@ -160,23 +178,21 @@ async function handleContinue() {
   if (!(count >= 1 && count <= 5)) return alert('Please select between 1 and 5 labels.');
   const data = currentOrder || {};
 
-  // 🐶 Puppy/Kitten reminder
+  // Puppy/Kitten reminder
   const alerts = data.alerts || [];
   const hasPuppyKitten = alerts.some(a => /puppy|kitten/i.test(a));
-  if (hasPuppyKitten && !confirm('Reminder: Young animals may require additional nutrition guidance. Continue?')) {
-    return;
-  }
+  if (hasPuppyKitten && !confirm('Reminder: Young animals may require extra nutrition guidance. Continue?')) return;
 
-  // 🐜 Flea/tick reminder
+  // Flea/tick reminder
   const fleaNeeded = els.chkFleaRequested.checked && !els.chkFleaProvided.checked;
-  if (fleaNeeded && !confirm('Flea/tick treatment requested but not marked as provided. Continue anyway?')) {
-    return;
-  }
+  if (fleaNeeded && !confirm('Flea/tick requested but not marked as provided. Continue anyway?')) return;
 
-  // Proceed to confirmation modal
   await openConfirmModal(count);
 }
 
+// ──────────────────────────────────────────────
+// MODAL + LABEL GENERATION
+// ──────────────────────────────────────────────
 function openConfirmModal(count) {
   return new Promise((resolve) => {
     els.confirmModal.querySelector('.modal-text').textContent =
@@ -187,12 +203,12 @@ function openConfirmModal(count) {
       if (els.confirmModal.returnValue === 'confirm') generateLabels(count);
       resolve();
     };
+
     els.confirmModal.addEventListener('close', onClose);
     els.confirmModal.showModal();
   });
 }
 
-// ------- LABEL GENERATION -------
 async function generateLabels(count) {
   if (!currentOrder) return alert('Lookup an order first.');
 
@@ -203,7 +219,7 @@ async function generateLabels(count) {
     lastName: data.lastName || '',
     pickupWindow: data.pickupWindow || '',
     count,
-    fleaProvided: !!els.chkFleaProvided.checked
+    fleaProvided: !!els.chkFleaProvided.checked,
   };
 
   try {
@@ -214,7 +230,7 @@ async function generateLabels(count) {
     const res = await fetch(`${API_BASE}/generate-labels`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
     });
     const j = await res.json();
     if (!res.ok || !j.ok) throw new Error(j.error || `HTTP ${res.status}`);
@@ -239,11 +255,14 @@ async function generateLabels(count) {
   }
 }
 
-// ------- EVENTS -------
+// ──────────────────────────────────────────────
+// EVENTS
+// ──────────────────────────────────────────────
 els.btnStartCam.addEventListener('click', startCamera);
 els.btnStopCam.addEventListener('click', stopCamera);
 els.btnLookup.addEventListener('click', handleLookup);
 els.btnContinue.addEventListener('click', handleContinue);
+
 els.btnClear.addEventListener('click', () => {
   stopCamera();
   els.formIdInput.value = '';
@@ -254,8 +273,6 @@ els.btnClear.addEventListener('click', () => {
   currentOrder = null;
 });
 
-// ------- Autofocus / Cleanup -------
-window.addEventListener('load', () => {
-  els.formIdInput.focus();
-});
+// Autofocus + cleanup
+window.addEventListener('load', () => els.formIdInput.focus());
 window.addEventListener('beforeunload', stopCamera);
