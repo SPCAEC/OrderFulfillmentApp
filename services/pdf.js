@@ -114,14 +114,18 @@ export async function generateAndUploadLabel({
     const stream = Readable.from([Buffer.from(pdfBytes)]);
     logStep('📤 Uploading to Drive...', { fileName, folder: OUTPUT_FOLDER_ID });
 
+    const uploadStream = Readable.from([Buffer.from(pdfBytes)]);
+
     const fileRes = await drive.files.create({
       requestBody: {
         name: fileName,
         mimeType: 'application/pdf',
         parents: [OUTPUT_FOLDER_ID],
+        driveId: '0AJz8fOdNJhtRUk9PVA', // your Shared Drive ID
       },
-      media: { mimeType: 'application/pdf', body: stream },
-      fields: 'id, webViewLink, webContentLink',
+      media: { mimeType: 'application/pdf', body: uploadStream },
+      supportsAllDrives: true,
+      fields: 'id, name, webViewLink, webContentLink',
     });
 
     logStep('✅ File uploaded to Drive', fileRes.data);
