@@ -66,13 +66,9 @@ export async function mergeAndUpload({ fileIds, outputName }) {
       throw new Error('No PDFs could be downloaded from Drive.');
 
     // 2️⃣ Call external merge service with base64 data
-    console.log(`🔗 Sending ${pdfs.length} PDF(s) to merge service...`);
-    const mergeRes = await axios.post(
-      MERGE_SERVICE_URL,
-      { pdfs },
-      { responseType: 'arraybuffer' }
-    );
-    console.log(`✅ Merge service returned ${mergeRes.data.byteLength} bytes`);
+    console.log('📡 Calling merge service:', MERGE_SERVICE_URL, 'with', urls.length, 'files');
+    const mergeRes = await axios.post(MERGE_SERVICE_URL, { urls }, { responseType: 'arraybuffer' });
+    console.log('✅ Merge service response received:', mergeRes.status, mergeRes.headers['content-type']);
 
     // 3️⃣ Upload merged result to Drive (separate folder)
     const fileRes = await drive.files.create({
