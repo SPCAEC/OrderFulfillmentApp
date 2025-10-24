@@ -8,131 +8,102 @@
 </head>
 <body>
   <div class="app">
-    <header>
+    <!-- ───────────── Header ───────────── -->
+    <header class="app-header">
       <img
-        src="https://drive.google.com/uc?export=view&id=1QdKdMM-VHas0xgrCFpP_cITMn2ZZx7hY"
-        alt="SPCA Logo"
+        src="https://lh3.googleusercontent.com/d/1voT6A_TB_w-KPzsr8yusKdn09h6rn6gp"
+        alt="SPCA Serving Erie County Logo"
+        class="logo"
       />
-      <h1>Order Fulfillment</h1>
+      <div class="header-text">
+        <h1>Order Fulfillment</h1>
+        <p class="subtitle">Pet Food Pantry • Serving Erie County</p>
+      </div>
     </header>
 
+    <!-- ───────────── Description ───────────── -->
     <p class="desc">Scan a barcode or enter a 12-digit Form ID</p>
 
+    <!-- ───────────── Lookup Card ───────────── -->
     <div class="card">
       <h2>Lookup</h2>
 
-      <div class="preview" id="previewContainer">
-        <video id="cameraPreview" autoplay playsinline></video>
-        <button class="btn secondary" id="stopBtn">Cancel</button>
+      <!-- Camera preview (hidden until active) -->
+      <div id="cameraContainer" class="camera" hidden>
+        <video id="video" autoplay playsinline></video>
+        <button id="btnStopCam" class="btn secondary">Cancel</button>
       </div>
 
-      <button class="btn primary" id="startScanBtn">📷 Scan Barcode</button>
+      <button id="btnStartCam" class="btn primary">📷 Scan Barcode</button>
 
       <div class="input-row">
-        <input id="formIdInput" placeholder="XXXXXXXXXXXX" maxlength="12" />
-        <button class="btn primary" id="lookupBtn">Lookup</button>
+        <input
+          id="formIdInput"
+          placeholder="XXXXXXXXXXXX"
+          maxlength="12"
+          inputmode="numeric"
+        />
+        <button id="btnLookup" class="btn primary">Lookup</button>
       </div>
 
       <small class="tip">
         Tip: If your device doesn’t support barcode scanning, enter the Form ID above.
       </small>
     </div>
-  </div>
 
-  <!-- Modal -->
-  <div class="modal-backdrop" id="modalBackdrop">
-    <div class="modal">
-      <h2>Confirm Label Printing</h2>
-      <p>
-        Printing these labels will also notify the client that their order is
-        ready for pickup.
-      </p>
-      <div class="actions">
-        <button class="btn secondary" id="cancelModalBtn">Cancel</button>
-        <button class="btn primary" id="confirmModalBtn">Print Labels</button>
+    <!-- ───────────── Results Section ───────────── -->
+    <section id="result-section" hidden>
+      <div id="orderSummary" class="card"></div>
+
+      <div id="puppyKittenAlert" class="alert" hidden>
+        🐶 Reminder: Puppies and kittens may require special dietary considerations.
       </div>
-    </div>
+
+      <div class="card">
+        <h3>Flea/Tick Treatment</h3>
+        <label><input type="checkbox" id="chkFleaRequested" disabled /> Requested</label>
+        <label><input type="checkbox" id="chkFleaProvided" /> Provided</label>
+      </div>
+
+      <div id="labelPrompt" class="card" hidden>
+        <h3>Label Quantity</h3>
+        <select id="labelCount">
+          <option value="1">1 label</option>
+          <option value="2">2 labels</option>
+          <option value="3">3 labels</option>
+          <option value="4">4 labels</option>
+          <option value="5">5 labels</option>
+        </select>
+        <button id="btnContinue" class="btn primary">Continue</button>
+      </div>
+
+      <div class="actions">
+        <button id="btnClear" class="btn secondary">Clear</button>
+      </div>
+    </section>
+
+    <!-- ───────────── Activity Log ───────────── -->
+    <section id="activity-section" hidden>
+      <div class="card">
+        <h2>Activity</h2>
+        <div id="activity" class="activity"></div>
+      </div>
+    </section>
   </div>
 
-  <script>
-    const startScanBtn = document.getElementById("startScanBtn");
-    const stopBtn = document.getElementById("stopBtn");
-    const previewContainer = document.getElementById("previewContainer");
-    const video = document.getElementById("cameraPreview");
-    const formIdInput = document.getElementById("formIdInput");
-    const lookupBtn = document.getElementById("lookupBtn");
-    const modalBackdrop = document.getElementById("modalBackdrop");
-    const cancelModalBtn = document.getElementById("cancelModalBtn");
-    const confirmModalBtn = document.getElementById("confirmModalBtn");
+  <!-- ───────────── Confirmation Modal ───────────── -->
+  <dialog id="confirmModal">
+    <h2>Confirm Label Printing</h2>
+    <p class="modal-text">
+      Printing these labels will also notify the client that their order is ready for pickup.
+    </p>
+    <menu>
+      <button class="btn secondary" value="cancel">Cancel</button>
+      <button class="btn primary" value="confirm">Print & Notify</button>
+    </menu>
+  </dialog>
 
-    let stream = null;
-    let barcodeDetector;
-
-    if ("BarcodeDetector" in window) {
-      barcodeDetector = new BarcodeDetector({ formats: ["code_128", "ean_13"] });
-    } else {
-      alert("BarcodeDetector API not supported in this browser.");
-    }
-
-    async function startCamera() {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment" },
-        });
-        video.srcObject = stream;
-        previewContainer.style.display = "block";
-        startScanBtn.style.display = "none";
-        scanLoop();
-      } catch (err) {
-        alert("Camera access denied or not available.");
-        console.error(err);
-      }
-    }
-
-    function stopCamera() {
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
-        stream = null;
-      }
-      previewContainer.style.display = "none";
-      startScanBtn.style.display = "inline-block";
-    }
-
-    async function scanLoop() {
-      if (!barcodeDetector || !stream) return;
-      try {
-        const result = await barcodeDetector.detect(video);
-        if (result.length > 0) {
-          const code = result[0].rawValue;
-          console.log("Detected barcode:", code);
-          stopCamera();
-          formIdInput.value = code;
-          openModal();
-        }
-      } catch (e) {
-        console.warn("Scan error", e);
-      }
-      if (stream) requestAnimationFrame(scanLoop);
-    }
-
-    function openModal() {
-      modalBackdrop.style.display = "flex";
-    }
-
-    function closeModal() {
-      modalBackdrop.style.display = "none";
-    }
-
-    startScanBtn.addEventListener("click", startCamera);
-    stopBtn.addEventListener("click", stopCamera);
-    lookupBtn.addEventListener("click", openModal);
-    cancelModalBtn.addEventListener("click", closeModal);
-
-    confirmModalBtn.addEventListener("click", () => {
-      closeModal();
-      alert("Labels are being generated and the client will be notified.");
-      // TODO: Integrate actual POST /generate-labels call here
-    });
-  </script>
+  <!-- ───────────── Scripts ───────────── -->
+  <script src="js/app.js" defer></script>
 </body>
 </html>

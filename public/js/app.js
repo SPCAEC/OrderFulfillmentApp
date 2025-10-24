@@ -4,185 +4,201 @@ const API_BASE = 'https://orderfulfillmentapp-580236127675.northamerica-northeas
 // ------- DOM -------
 const els = {
   video: document.getElementById('video'),
-  canvas: document.getElementById('canvas'),
   btnStartCam: document.getElementById('btnStartCam'),
   btnStopCam: document.getElementById('btnStopCam'),
   formIdInput: document.getElementById('formIdInput'),
   btnLookup: document.getElementById('btnLookup'),
   resultSection: document.getElementById('result-section'),
   orderSummary: document.getElementById('orderSummary'),
-  btnClear: document.getElementById('btnClear'),
-  chkFleaRequested: document.getElementById('chkFleaRequested'),
-  chkFleaProvided: document.getElementById('chkFleaProvided'),
+  labelPrompt: document.getElementById('labelPrompt'),
   labelCount: document.getElementById('labelCount'),
+  btnContinue: document.getElementById('btnContinue'),
   btnGenerate: document.getElementById('btnGenerate'),
   puppyKittenAlert: document.getElementById('puppyKittenAlert'),
+  chkFleaRequested: document.getElementById('chkFleaRequested'),
+  chkFleaProvided: document.getElementById('chkFleaProvided'),
+  confirmModal: document.getElementById('confirmModal'),
   activitySection: document.getElementById('activity-section'),
   activity: document.getElementById('activity'),
-  confirmModal: document.getElementById('confirmModal')
+  btnClear: document.getElementById('btnClear')
 };
 
 // ------- STATE -------
-let scanLoop = null;
 let mediaStream = null;
+let scanLoop = null;
 let lastDetected = '';
-let currentOrder = null; // { formId, firstName, lastName, pickupWindow, additionalServices, alerts }
+let currentOrder = null;
 
 // ------- UTIL -------
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 function scrollIntoView(el) { el?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
-function logLine(kind, msg){
+function logLine(kind, msg) {
   const line = document.createElement('div');
-  line.className = `line ${kind||''}`;
+  line.className = `line ${kind || ''}`;
   line.innerHTML = `<span class="dot"></span><span>${msg}</span>`;
   els.activity.appendChild(line);
 }
-function setSectionVisible(section, visible){
-  section.hidden = !visible;
-  if (visible) scrollIntoView(section);
+function setVisible(el, visible) {
+  el.hidden = !visible;
+  if (visible) scrollIntoView(el);
 }
-function sanitizeFormId(s){
-  return String(s||'').replace(/\D+/g,'').slice(0,12);
+function sanitizeFormId(s) {
+  return String(s || '').replace(/\D+/g, '').slice(0, 12);
 }
 
 // ------- LOOKUP -------
-async function lookup(formId){
+async function lookup(formId) {
   logLine('', `Looking up order ${formId}…`);
   const res = await fetch(`${API_BASE}/lookup`, {
     method: 'POST',
-    headers: {'Content-Type':'application/json'},
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ formId })
   });
   const data = await res.json();
   if (!data.ok) throw new Error(data.error || 'Lookup failed');
-  return data;
+  return data.data || data;
 }
 
-function renderOrderSummary(data){
+function renderSummary(data) {
   const { formId, firstName, lastName, pickupWindow } = data;
   els.orderSummary.innerHTML = `
     <div class="kv"><div class="k">Form ID</div><div>${formId}</div></div>
-    <div class="kv"><div class="k">Client</div><div>${(firstName?.charAt(0)||'')} ${lastName||''}</div></div>
-    <div class="kv"><div class="k">Pickup Window</div><div>${pickupWindow||'—'}</div></div>
+    <div class="kv"><div class="k">Client</div><div>${firstName || ''} ${lastName || ''}</div></div>
+    <div class="kv"><div class="k">Pickup Window</div><div>${pickupWindow || '—'}</div></div>
   `;
 }
 
-// ------- BARCODE -------
-async function startCamera(){
+// ------- CAMERA / BARCODE -------
+async function startCamera() {
   if (!('BarcodeDetector' in window)) {
-    alert('BarcodeDetector not supported on this device. Use manual entry.');
+    alert('BarcodeDetector not supported on this device. Use manual entry instead.');
     return;
   }
-  try{
+  try {
     mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
     els.video.srcObject = mediaStream;
     await els.video.play();
+    els.video.hidden = false;
+    els.btnStartCam.style.display = 'none';
+    els.btnStopCam.style.display = 'inline-block';
 
-    const detector = new BarcodeDetector({ formats: ['code_128','ean_13','code_39','upc_a','upc_e'] });
+    const detector = new BarcodeDetector({ formats: ['code_128', 'ean_13', 'upc_a', 'upc_e'] });
 
-    scanLoop = (async function loop(){
+    scanLoop = (async function loop() {
       if (!mediaStream) return;
-      try{
+      try {
         const codes = await detector.detect(els.video);
-        if (codes?.length){
+        if (codes?.length) {
           const raw = codes[0].rawValue || '';
           const digits = sanitizeFormId(raw);
-          if (digits.length === 12 && digits !== lastDetected){
+          if (digits.length === 12 && digits !== lastDetected) {
             lastDetected = digits;
             els.formIdInput.value = digits;
-            await onLookupClick(); // auto-lookup on capture
+            stopCamera();
+            await handleLookup();
+            return;
           }
         }
-      }catch(e){ /* ignore frame */ }
+      } catch { /* ignore frame */ }
       requestAnimationFrame(loop);
     })();
-  }catch(err){
-    console.error(err);
-    alert('Camera unavailable. Use manual entry.');
+  } catch (err) {
+    console.error('Camera error:', err);
+    alert('Camera unavailable. Try manual entry.');
   }
 }
 
-function stopCamera(){
-  if (mediaStream){
+function stopCamera() {
+  if (mediaStream) {
     mediaStream.getTracks().forEach(t => t.stop());
     mediaStream = null;
   }
+  els.video.hidden = true;
+  els.btnStopCam.style.display = 'none';
+  els.btnStartCam.style.display = 'inline-block';
   lastDetected = '';
 }
 
-// ------- EVENTS -------
-els.btnStartCam.addEventListener('click', startCamera);
-els.btnStopCam.addEventListener('click', stopCamera);
-
-els.btnLookup.addEventListener('click', onLookupClick);
-els.formIdInput.addEventListener('input', (e)=>{
-  e.target.value = sanitizeFormId(e.target.value);
-});
-
-async function onLookupClick(){
-  try{
+// ------- FLOW HANDLERS -------
+async function handleLookup() {
+  try {
     const formId = sanitizeFormId(els.formIdInput.value);
     if (formId.length !== 12) return alert('Form ID must be 12 digits.');
-
-    // Prepare UI
     els.activity.innerHTML = '';
-    setSectionVisible(els.activitySection, true);
+    setVisible(els.activitySection, true);
     logLine('', 'Starting lookup…');
 
-    // Lookup
-    const resp = await lookup(formId);
-    currentOrder = resp; // keep full payload (expects .data or normalized top-level)
-    const data = resp.data || resp; // support either shape
+    const data = await lookup(formId);
+    currentOrder = data;
+    renderSummary(data);
+    setVisible(els.resultSection, true);
 
-    renderOrderSummary(data);
-    setSectionVisible(els.resultSection, true);
-
-    // Puppy/Kitten reminder from alerts array
+    // Puppy/Kitten alert
     const alerts = data.alerts || [];
     const hasPuppyKitten = alerts.some(a => /puppy|kitten/i.test(a));
     els.puppyKittenAlert.hidden = !hasPuppyKitten;
 
-    // Flea requested?
+    // Flea service checkboxes
     const services = data.additionalServices || [];
     const fleaRequested = services.some(s => /flea/i.test(s));
     els.chkFleaRequested.checked = fleaRequested;
+    els.chkFleaProvided.checked = false;
 
+    // Move to label count step
+    setVisible(els.labelPrompt, true);
+    scrollIntoView(els.labelPrompt);
     logLine('ok', 'Lookup complete.');
-  }catch(err){
+  } catch (err) {
     console.error(err);
     logLine('err', `Lookup failed: ${err.message}`);
     alert(err.message);
   }
 }
 
-els.btnClear.addEventListener('click', ()=>{
-  stopCamera();
-  els.formIdInput.value = '';
-  currentOrder = null;
-  els.resultSection.hidden = true;
-  els.activitySection.hidden = true;
-  els.activity.innerHTML = '';
-});
-
-// Generate labels (with confirmation modal)
-els.btnGenerate.addEventListener('click', async ()=>{
-  if (!currentOrder){
-    return alert('Lookup an order first.');
-  }
-  const formId = sanitizeFormId(els.formIdInput.value);
+async function handleContinue() {
   const count = Number(els.labelCount.value || 0);
-  if (!(count >= 1 && count <= 5)){
-    return alert('Label count must be between 1 and 5.');
+  if (!(count >= 1 && count <= 5)) return alert('Please select between 1 and 5 labels.');
+  const data = currentOrder || {};
+
+  // 🐶 Puppy/Kitten reminder
+  const alerts = data.alerts || [];
+  const hasPuppyKitten = alerts.some(a => /puppy|kitten/i.test(a));
+  if (hasPuppyKitten && !confirm('Reminder: Young animals may require additional nutrition guidance. Continue?')) {
+    return;
   }
 
-  // open modal
-  const choice = await openConfirmModal();
-  if (choice !== 'confirm') return;
+  // 🐜 Flea/tick reminder
+  const fleaNeeded = els.chkFleaRequested.checked && !els.chkFleaProvided.checked;
+  if (fleaNeeded && !confirm('Flea/tick treatment requested but not marked as provided. Continue anyway?')) {
+    return;
+  }
 
-  // Build payload
-  const data = currentOrder.data || currentOrder;
+  // Proceed to confirmation modal
+  await openConfirmModal(count);
+}
+
+function openConfirmModal(count) {
+  return new Promise((resolve) => {
+    els.confirmModal.querySelector('.modal-text').textContent =
+      `Printing ${count} label(s) will also notify the client. Proceed?`;
+
+    const onClose = () => {
+      els.confirmModal.removeEventListener('close', onClose);
+      if (els.confirmModal.returnValue === 'confirm') generateLabels(count);
+      resolve();
+    };
+    els.confirmModal.addEventListener('close', onClose);
+    els.confirmModal.showModal();
+  });
+}
+
+// ------- LABEL GENERATION -------
+async function generateLabels(count) {
+  if (!currentOrder) return alert('Lookup an order first.');
+
+  const data = currentOrder;
   const payload = {
-    formId,
+    formId: sanitizeFormId(els.formIdInput.value),
     firstName: data.firstName || '',
     lastName: data.lastName || '',
     pickupWindow: data.pickupWindow || '',
@@ -190,21 +206,21 @@ els.btnGenerate.addEventListener('click', async ()=>{
     fleaProvided: !!els.chkFleaProvided.checked
   };
 
-  try{
+  try {
     els.activity.innerHTML = '';
-    setSectionVisible(els.activitySection, true);
+    setVisible(els.activitySection, true);
     logLine('', 'Generating labels…');
 
     const res = await fetch(`${API_BASE}/generate-labels`, {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
     const j = await res.json();
     if (!res.ok || !j.ok) throw new Error(j.error || `HTTP ${res.status}`);
 
     logLine('ok', `Created ${j.count} label(s).`);
-    if (j.merged?.url){
+    if (j.merged?.url) {
       const a = document.createElement('a');
       a.href = j.merged.url;
       a.target = '_blank';
@@ -214,31 +230,32 @@ els.btnGenerate.addEventListener('click', async ()=>{
       line.innerHTML = `<span class="dot"></span>`;
       line.appendChild(a);
       els.activity.appendChild(line);
+      window.open(j.merged.url, '_blank');
     }
-  }catch(err){
+  } catch (err) {
     console.error(err);
     logLine('err', `Label generation failed: ${err.message}`);
     alert(err.message);
   }
-});
-
-// ------- Modal helper -------
-function openConfirmModal(){
-  return new Promise((resolve)=>{
-    const onClose = (ev)=> {
-      els.confirmModal.removeEventListener('close', onClose);
-      resolve(els.confirmModal.returnValue);
-    };
-    els.confirmModal.addEventListener('close', onClose);
-    els.confirmModal.showModal();
-  });
 }
 
-// ------- Autofocus / Autoscroll -------
-window.addEventListener('load', ()=>{
-  scrollIntoView(document.querySelector('.app-header'));
-  els.formIdInput.focus();
+// ------- EVENTS -------
+els.btnStartCam.addEventListener('click', startCamera);
+els.btnStopCam.addEventListener('click', stopCamera);
+els.btnLookup.addEventListener('click', handleLookup);
+els.btnContinue.addEventListener('click', handleContinue);
+els.btnClear.addEventListener('click', () => {
+  stopCamera();
+  els.formIdInput.value = '';
+  els.resultSection.hidden = true;
+  els.labelPrompt.hidden = true;
+  els.activitySection.hidden = true;
+  els.activity.innerHTML = '';
+  currentOrder = null;
 });
 
-// Cleanup camera when navigating away
+// ------- Autofocus / Cleanup -------
+window.addEventListener('load', () => {
+  els.formIdInput.focus();
+});
 window.addEventListener('beforeunload', stopCamera);
