@@ -30,18 +30,23 @@
 
       <!-- Camera preview (hidden until active) -->
       <div id="cameraContainer" class="camera" hidden>
-        <video id="video" autoplay playsinline></video>
-        <button id="btnStopCam" class="btn secondary">Cancel</button>
+        <video id="video" autoplay playsinline aria-label="Camera preview"></video>
+        <button id="btnStopCam" class="btn secondary" aria-label="Stop camera">Cancel</button>
       </div>
 
-      <button id="btnStartCam" class="btn primary">📷 Scan Barcode</button>
+      <!-- Start scanning -->
+      <button id="btnStartCam" class="btn primary" aria-label="Start barcode scan">
+        📷 Scan Barcode
+      </button>
 
+      <!-- Manual Form ID input -->
       <div class="input-row">
         <input
           id="formIdInput"
           placeholder="XXXXXXXXXXXX"
           maxlength="12"
           inputmode="numeric"
+          aria-label="Enter 12-digit Form ID"
         />
         <button id="btnLookup" class="btn primary">Lookup</button>
       </div>
@@ -74,7 +79,10 @@
           <option value="4">4 labels</option>
           <option value="5">5 labels</option>
         </select>
-        <button id="btnContinue" class="btn primary">Continue</button>
+        <div class="actions">
+          <button id="btnContinue" class="btn primary">Continue</button>
+          <button id="btnGenerate" class="btn primary" hidden>Generate</button>
+        </div>
       </div>
 
       <div class="actions">

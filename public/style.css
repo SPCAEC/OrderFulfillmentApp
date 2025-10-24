@@ -29,6 +29,21 @@ body {
   padding: 2rem 1.5rem 6rem;
 }
 
+/* Hide elements when [hidden] */
+[hidden] {
+  display: none !important;
+}
+
+/* Fade-in animation for revealed sections */
+section:not([hidden]), .camera:not([hidden]) {
+  animation: fadeIn 0.25s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* ───────────── Header ───────────── */
 header {
   display: flex;
@@ -38,14 +53,14 @@ header {
 }
 
 .logo {
-  height: 70px;
+  height: 90px;
   width: auto;
 }
 
 .header-text h1 {
   margin: 0;
   color: var(--brand-blue);
-  font-size: 1.8rem;
+  font-size: 1.9rem;
   font-weight: 700;
 }
 
@@ -53,12 +68,14 @@ header {
   color: var(--brand-purple);
   margin: 0.25rem 0 0;
   font-size: 1rem;
+  font-weight: 500;
 }
 
 /* ───────────── Description ───────────── */
 .desc {
   color: var(--brand-orange);
   font-size: 1rem;
+  text-align: center;
   margin: 0 0 1rem;
 }
 
@@ -106,6 +123,10 @@ header {
   background-color: #7a7a7a;
 }
 
+.btn:active {
+  transform: scale(0.97);
+}
+
 /* ───────────── Input & Select ───────────── */
 .input-row {
   display: flex;
@@ -148,7 +169,10 @@ small,
 }
 
 .camera video {
+  display: block;
   width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
   border-radius: var(--radius);
   background: #000;
 }
@@ -157,6 +181,7 @@ small,
   position: absolute;
   top: 0.75rem;
   right: 0.75rem;
+  z-index: 10;
 }
 
 /* ───────────── Key-Value Summary ───────────── */
@@ -218,6 +243,7 @@ dialog {
   width: 90%;
   max-width: 400px;
   box-shadow: var(--shadow);
+  background: var(--card-bg);
 }
 
 dialog h2 {
@@ -227,13 +253,38 @@ dialog h2 {
 
 dialog menu {
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
+  flex-wrap: wrap;
   gap: 1rem;
   margin-top: 1.5rem;
 }
 
 dialog::backdrop {
   background: rgba(0, 0, 0, 0.3);
+}
+/* ───────────── Branded Spinner ───────────── */
+.spinner {
+  display: inline-block;
+  width: 42px;
+  height: 42px;
+  border: 4px solid rgba(0, 43, 73, 0.15); /* subtle blue tint background */
+  border-top: 4px solid var(--brand-green);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 1rem auto;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Optional wrapper to center spinner inside cards or sections */
+.spinner-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 1.5rem 0;
 }
 
 /* ───────────── Responsive ───────────── */
