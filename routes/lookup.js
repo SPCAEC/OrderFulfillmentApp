@@ -4,9 +4,18 @@ import { GoogleAuth } from 'google-auth-library';
 
 const router = express.Router();
 
+// ──────────────────────────────────────────────
 // POST /lookup
+// Body: { formId: '123456789012' }
+// ──────────────────────────────────────────────
 router.post('/', async (req, res) => {
   try {
+    const { formId } = req.body || {};
+    if (!formId) throw new Error('Missing formId');
+
+    console.log(`🔍 Lookup request for formId: ${formId}`);
+
+    // Google Sheets auth
     const creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
     const auth = new GoogleAuth({
       credentials: creds,
@@ -14,12 +23,9 @@ router.post('/', async (req, res) => {
     });
     const sheets = google.sheets({ version: 'v4', auth });
 
-    // Expect body: { formId: 'ABC123' }
-    const { formId } = req.body || {};
-    if (!formId) throw new Error('Missing formId');
-
+    // Config — update sheet/tab name if needed
     const sheetId = '1XK2ENcMEi-MYeRY6gzGf1aRR8v9mEDuHZx6s_slm8ZE';
-    const range = 'Form Responses 1!A:Z'; // adjust to your real tab name
+    const range = 'Form Responses 1!A:Z';
 
     const resp = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,
@@ -27,23 +33,39 @@ router.post('/', async (req, res) => {
     });
 
     const rows = resp.data.values || [];
-    const header = rows[0];
+    if (rows.length === 0) throw new Error('Sheet is empty');
+
+    const headers = rows[0];
     const data = rows.slice(1);
 
-    // Find row by Form ID
-    const idx = header.indexOf('FormID');
-    if (idx === -1) throw new Error('No Form ID column');
+    // Locate the FormID column (case-insensitive)
+    const formIdCol = headers.findIndex(h => /^form\s*id$/i.test(h.trim()));
+    if (formIdCol === -1) throw new Error(`No FormID column found. Headers: ${headers.join(', ')}`);
 
-    const match = data.find(r => r[idx] === formId);
-    if (!match) return res.status(404).json({ found: false });
+    // Find matching row
+    const match = data.find(r => (r[formIdCol] || '').trim() === formId.trim());
+    if (!match) return res.status(404).json({ ok: false, error: 'No matching record found.' });
 
-    const rowObj = {};
-    header.forEach((h, i) => (rowObj[h] = match[i] || ''));
+    // Build row object
+    const row = {};
+    headers.forEach((h, i) => (row[h] = match[i] || ''));
 
-    res.json({ found: true, row: rowObj });
+    // Normalize key fields for frontend
+    const result = {
+      formId: row['FormID'],
+      firstName: row['First Name'] || row['Client First Name'] || '',
+      lastName: row['Last Name'] || row['Client Last Name'] || '',
+      pickupWindow: row['Pickup Window'] || row['Pickup Time'] || '',
+      additionalServices: (row['Additional Services'] || '').split(/,\s*/).filter(Boolean),
+      alerts: (row['Alerts'] || '').split(/,\s*/).filter(Boolean)
+    };
+
+    console.log(`✅ Lookup success for FormID: ${formId}`);
+
+    res.json({ ok: true, data: result });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
+    console.error('❌ Lookup failed:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 
