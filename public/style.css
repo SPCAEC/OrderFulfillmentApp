@@ -1,191 +1,252 @@
+/* ───────────── Root Theme ───────────── */
 :root {
-  --blue: #002b49;     /* Header text */
-  --purple: #512a44;   /* Subtitles */
-  --green: #4e5b31;    /* Primary button */
-  --gray: #9b9b9b;     /* Secondary button */
-  --orange: #be6a14;   /* Small/descriptive text */
-  --radius: 14px;
-  --shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --brand-blue: #002b49;
+  --brand-green: #4e5b31;
+  --brand-purple: #512a44;
+  --brand-orange: #be6a14;
+  --gray: #9b9b9b;
+  --bg-light: #f8f9fa;
+  --card-bg: #ffffff;
+  --radius: 16px;
+  --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
+/* ───────────── Base ───────────── */
 body {
+  font-family: var(--font);
+  background-color: var(--bg-light);
+  color: var(--brand-blue);
   margin: 0;
-  font-family: system-ui, sans-serif;
-  background: #fff;
-  color: var(--blue);
+  padding: 0;
   display: flex;
   justify-content: center;
-  align-items: flex-start;
-  padding: 2rem;
 }
 
 .app {
   width: 100%;
-  max-width: 600px;
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
+  max-width: 720px;
+  padding: 2rem 1.5rem 6rem;
 }
 
-/* ─── Header ───────────────────────────── */
+/* ───────────── Header ───────────── */
 header {
   display: flex;
   align-items: center;
-  justify-content: center;   /* centers horizontally */
-  gap: 12px;
-  flex-wrap: wrap;           /* wraps nicely on small screens */
-  margin-bottom: 10px;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
 }
 
 .logo {
-  height: 120px;             /* increase overall visual size */
-  width: auto;               /* keep aspect ratio */
-  object-fit: contain;       /* clean scaling */
-  margin-right: 18px;        /* spacing from title */
-  vertical-align: middle;
-  display: inline-block;
-}
-
-@media (min-width: 900px) {
-  .logo {
-    height: 140px;           /* slightly larger on desktop */
-  }
+  height: 70px;
+  width: auto;
 }
 
 .header-text h1 {
-  font-size: 1.8rem;
-  color: var(--blue);
   margin: 0;
+  color: var(--brand-blue);
+  font-size: 1.8rem;
+  font-weight: 700;
 }
 
-.header-text .subtitle {
-  margin: 0.25rem 0 0 0;
+.subtitle {
+  color: var(--brand-purple);
+  margin: 0.25rem 0 0;
   font-size: 1rem;
-  color: var(--purple);
 }
 
-.desc,
-small,
-p {
-  color: var(--orange);
+/* ───────────── Description ───────────── */
+.desc {
+  color: var(--brand-orange);
+  font-size: 1rem;
+  margin: 0 0 1rem;
 }
 
+/* ───────────── Card Container ───────────── */
 .card {
-  background: #f8fafc;
+  background: var(--card-bg);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  padding: 1.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.25rem;
 }
 
-h2 {
-  color: var(--purple);
-  font-size: 1.4rem;
+.card h2, .card h3 {
+  color: var(--brand-purple);
   margin-top: 0;
 }
 
-/* ─── Buttons ───────────────────────────── */
+/* ───────────── Buttons ───────────── */
 .btn {
   display: inline-block;
-  padding: 0.9rem 1.5rem;
   border: none;
   border-radius: var(--radius);
-  font-size: 1.1rem;
-  font-weight: 600;
+  font-size: 1rem;
+  padding: 0.75rem 1.25rem;
   cursor: pointer;
-  text-align: center;
-  transition: background 0.2s ease, opacity 0.2s ease;
+  font-weight: 600;
+  transition: background-color 0.2s ease, transform 0.1s ease;
   color: #fff;
 }
 
 .btn.primary {
-  background: var(--green);
+  background-color: var(--brand-green);
 }
 
 .btn.primary:hover {
-  opacity: 0.9;
+  background-color: #3c4726;
 }
 
 .btn.secondary {
-  background: var(--gray);
+  background-color: var(--gray);
+  color: #fff;
 }
 
 .btn.secondary:hover {
-  opacity: 0.85;
+  background-color: #7a7a7a;
 }
 
-/* ─── Camera Preview ───────────────────────────── */
-.preview {
-  display: none;
-  width: 100%;
-  border-radius: var(--radius);
-  overflow: hidden;
-  background: #000;
-  position: relative;
-}
-
-video {
-  width: 100%;
-  height: auto;
-  display: block;
-}
-
-/* ─── Input Row ───────────────────────────── */
+/* ───────────── Input & Select ───────────── */
 .input-row {
   display: flex;
   gap: 0.5rem;
-  align-items: center;
+  margin-top: 1rem;
 }
 
-input {
+input,
+select {
   flex: 1;
-  padding: 0.8rem;
-  border: 1px solid #cbd5e1;
+  padding: 0.75rem 1rem;
   border-radius: var(--radius);
-  font-size: 1.1rem;
+  border: 1px solid #ccc;
+  font-size: 1rem;
+  outline: none;
 }
 
-/* ─── Modal ───────────────────────────── */
-.modal-backdrop {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
+input:focus,
+select:focus {
+  border-color: var(--brand-green);
+  box-shadow: 0 0 0 3px rgba(78, 91, 49, 0.25);
 }
 
-.modal {
-  background: #fff;
+/* ───────────── Tip & Small Text ───────────── */
+.tip,
+small,
+.desc,
+.alert {
+  color: var(--brand-orange);
+  font-size: 0.9rem;
+}
+
+/* ───────────── Camera Preview ───────────── */
+.camera {
+  position: relative;
   border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 1rem;
   box-shadow: var(--shadow);
-  padding: 2rem;
-  max-width: 420px;
-  text-align: center;
 }
 
-.modal h2 {
-  margin-top: 0;
-  color: var(--purple);
+.camera video {
+  width: 100%;
+  border-radius: var(--radius);
+  background: #000;
 }
 
-.modal p {
-  font-size: 1.05rem;
-  color: var(--orange);
+.camera .btn.secondary {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
 }
 
-.modal .actions {
+/* ───────────── Key-Value Summary ───────────── */
+.kv {
   display: flex;
   justify-content: space-between;
+  margin: 0.25rem 0;
+}
+
+.kv .k {
+  font-weight: 600;
+  color: var(--brand-purple);
+}
+
+/* ───────────── Activity Log ───────────── */
+.activity {
+  max-height: 250px;
+  overflow-y: auto;
+  padding-top: 0.5rem;
+}
+
+.line {
+  display: flex;
+  align-items: center;
+  font-size: 0.95rem;
+  margin-bottom: 0.25rem;
+}
+
+.line .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 0.5rem;
+  background-color: var(--brand-orange);
+}
+
+.line.ok .dot {
+  background-color: var(--brand-green);
+}
+
+.line.err .dot {
+  background-color: red;
+}
+
+/* ───────────── Alert Banner ───────────── */
+.alert {
+  background: #fff8f0;
+  border-left: 4px solid var(--brand-orange);
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius);
+  margin-bottom: 1rem;
+}
+
+/* ───────────── Modal (Dialog) ───────────── */
+dialog {
+  border: none;
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: var(--shadow);
+}
+
+dialog h2 {
+  margin-top: 0;
+  color: var(--brand-blue);
+}
+
+dialog menu {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
   margin-top: 1.5rem;
 }
 
-/* ─── Tablet Layout ───────────────────────────── */
+dialog::backdrop {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+/* ───────────── Responsive ───────────── */
 @media (min-width: 768px) {
   .app {
-    max-width: 700px;
+    padding: 3rem 2rem 6rem;
+  }
+
+  .header-text h1 {
+    font-size: 2rem;
+  }
+
+  .btn {
+    font-size: 1.05rem;
   }
 }
