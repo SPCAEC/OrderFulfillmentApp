@@ -10,6 +10,7 @@ import { GoogleAuth } from 'google-auth-library';
 
 import lookupRoute from './routes/lookup.js';
 import generateLabelsRoute from './routes/generateLabels.js';
+import updateAfterGenerateRoute from './routes/updateAfterGenerate.js';
 
 const app = express();
 
@@ -93,6 +94,7 @@ app.get('/test-sheets', async (req, res) => {
 // ──────────────────────────────────────────────
 app.use('/lookup', lookupRoute);
 app.use('/generate-labels', generateLabelsRoute);
+app.use('/update-after-generate', updateAfterGenerateRoute);
 
 // ──────────────────────────────────────────────
 //  404 Fallback

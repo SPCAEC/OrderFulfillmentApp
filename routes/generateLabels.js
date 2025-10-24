@@ -7,6 +7,7 @@
 
 import fs from 'fs';
 import express from 'express';
+import fetch from 'node-fetch';
 import { google } from 'googleapis';
 import { GoogleAuth } from 'google-auth-library';
 import { generateAndUploadLabel } from '../services/pdf.js';
@@ -19,6 +20,9 @@ const router = express.Router();
 // ──────────────────────────────────────────────
 const OUTPUT_FOLDER_ID = '1LslhtWlSpmp-zQgqlpafaHVt7JsYTFdH'; // Pantry Labels folder
 const DRIVE_ID = '0AJz8fOdNJhtRUk9PVA'; // Shared Drive ID
+const API_BASE_URL =
+  process.env.API_BASE_URL ||
+  'https://orderfulfillmentapp-580236127675.northamerica-northeast2.run.app';
 
 // Timestamped logger
 function logStep(label, data = null) {
@@ -45,14 +49,36 @@ function loadCreds(scopeLabel) {
   }
 }
 
+// Helper: update spreadsheet after merge success
+async function updateAfterGenerate({ formId, pdfId, pdfUrl, fleaProvided }) {
+  try {
+    const body = { formId, pdfId, pdfUrl, fleaProvided };
+    logStep('📄 Calling /update-after-generate', body);
+
+    const res = await fetch(`${API_BASE_URL}/update-after-generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    const j = await res.json();
+    if (!res.ok || !j.ok) throw new Error(j.error || `HTTP ${res.status}`);
+    logStep('✅ Sheet updated successfully', j);
+    return true;
+  } catch (err) {
+    logStep('⚠️ Sheet update failed', err.message);
+    return false;
+  }
+}
+
 // ──────────────────────────────────────────────
 // POST /generate-labels
-// Body: { formId, firstName, lastName, pickupWindow, count }
+// Body: { formId, firstName, lastName, pickupWindow, count, fleaProvided }
 // ──────────────────────────────────────────────
 router.post('/', async (req, res) => {
   try {
     logStep('▶️ /generate-labels request received', req.body);
-    const { formId, firstName, lastName, pickupWindow, count } = req.body || {};
+    const { formId, firstName, lastName, pickupWindow, count, fleaProvided } = req.body || {};
     const n = Number(count || 0);
 
     // --- Validation ---
@@ -110,24 +136,22 @@ router.post('/', async (req, res) => {
       return res.status(500).json({ ok: false, error: merged.error || 'Merge failed.' });
     }
 
-    // --- Placeholder for Sheet update ---
-    try {
-      const creds = loadCreds('Sheets');
-      const auth = new GoogleAuth({
-        credentials: creds,
-        scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-      });
-      const sheets = google.sheets({ version: 'v4', auth });
-      logStep('🧾 Sheets client initialized (no update performed yet)');
-    } catch (err) {
-      logStep('⚠️ Sheet update skipped', err.message);
-    }
+    // --- NEW: Update Google Sheet after merge success ---
+    const updateOk = await updateAfterGenerate({
+      formId,
+      pdfId: merged.fileId,
+      pdfUrl: merged.url,
+      fleaProvided,
+    });
+
+    if (!updateOk) logStep('⚠️ Sheet update failed or incomplete');
 
     // --- Respond ---
     logStep('✅ All labels processed successfully', {
       count: labelFiles.length,
       merged: merged.fileId,
       driveId: DRIVE_ID,
+      updatedSheet: updateOk,
     });
 
     res.json({
@@ -137,6 +161,7 @@ router.post('/', async (req, res) => {
         id: merged.fileId,
         url: merged.url,
       },
+      updatedSheet: updateOk,
     });
   } catch (err) {
     console.error('🚨 /generate-labels failed:', err);

@@ -21,7 +21,6 @@ const els = {
   labelPrompt: document.getElementById('labelPrompt'),
   labelCount: document.getElementById('labelCount'),
   btnContinue: document.getElementById('btnContinue'),
-  btnGenerate: document.getElementById('btnGenerate'),
 
   puppyKittenAlert: document.getElementById('puppyKittenAlert'),
   chkFleaRequested: document.getElementById('chkFleaRequested'),
@@ -55,6 +54,16 @@ function logLine(kind, msg) {
   line.className = `line ${kind || ''}`;
   line.innerHTML = `<span class="dot"></span><span>${msg}</span>`;
   els.activity.appendChild(line);
+}
+
+function setLoading(isLoading, message = 'Processing...') {
+  els.activitySection.hidden = false;
+  if (isLoading) {
+    els.activity.innerHTML = `<div class="spinner"></div><p>${message}</p>`;
+  } else {
+    const spinner = els.activity.querySelector('.spinner');
+    if (spinner) spinner.remove();
+  }
 }
 
 // ──────────────────────────────────────────────
@@ -196,7 +205,7 @@ async function handleContinue() {
 function openConfirmModal(count) {
   return new Promise((resolve) => {
     els.confirmModal.querySelector('.modal-text').textContent =
-      `Printing ${count} label(s) will also notify the client. Proceed?`;
+      `Printing ${count} label(s) will notify the client and update the record. Proceed?`;
 
     const onClose = () => {
       els.confirmModal.removeEventListener('close', onClose);
@@ -223,32 +232,38 @@ async function generateLabels(count) {
   };
 
   try {
-    els.activity.innerHTML = '';
-    setVisible(els.activitySection, true);
-    logLine('', 'Generating labels…');
-
+    setLoading(true, 'Creating labels...');
     const res = await fetch(`${API_BASE}/generate-labels`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
+    setLoading(false);
+
     const j = await res.json();
     if (!res.ok || !j.ok) throw new Error(j.error || `HTTP ${res.status}`);
 
-    logLine('ok', `Created ${j.count} label(s).`);
+    els.activity.innerHTML = '';
+    logLine('ok', `✅ Created ${j.count} label(s).`);
+    if (j.updatedSheet) logLine('ok', '🧾 Google Sheet updated.');
+
     if (j.merged?.url) {
+      logLine('ok', 'Opening PDF...');
+      window.open(j.merged.url, '_blank');
+
       const a = document.createElement('a');
       a.href = j.merged.url;
       a.target = '_blank';
-      a.textContent = 'Open merged PDF';
-      const line = document.createElement('div');
-      line.className = 'line ok';
-      line.innerHTML = `<span class="dot"></span>`;
-      line.appendChild(a);
-      els.activity.appendChild(line);
-      window.open(j.merged.url, '_blank');
+      a.textContent = '⬇️ Reopen PDF';
+      const div = document.createElement('div');
+      div.className = 'line ok';
+      div.appendChild(a);
+      els.activity.appendChild(div);
+    } else {
+      logLine('err', 'No merged PDF returned.');
     }
   } catch (err) {
+    setLoading(false);
     console.error(err);
     logLine('err', `Label generation failed: ${err.message}`);
     alert(err.message);
