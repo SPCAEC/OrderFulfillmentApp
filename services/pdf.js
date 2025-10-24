@@ -1,8 +1,10 @@
 // services/pdf.js
 // -----------------------------------------------------------------------------
 // Generates 4x6 “Pet Food Pantry Pickup” bag labels and uploads PDFs to Drive.
+// Supports Cloud Run secrets (file path) OR inline JSON creds.
 // -----------------------------------------------------------------------------
 
+import fs from 'fs';
 import { PDFDocument, StandardFonts } from 'pdf-lib';
 import axios from 'axios';
 import { google } from 'googleapis';
@@ -14,9 +16,10 @@ import { Readable } from 'stream';
 // ──────────────────────────────────────────────
 const LOGO_URL =
   'https://drive.google.com/uc?export=download&id=1QdKdMM-VHas0xgrCFpP_cITMn2ZZx7hY';
-const OUTPUT_FOLDER_ID = '1wGhhU3XulZVW8JzO1AUlq0L3XHNVGG-b'; // Pantry label folder ID
+const OUTPUT_FOLDER_ID = '1LslhtWlSpmp-zQgqlpafaHVt7JsYTFdH'; // ✅ Folder inside Shared Drive
+const DRIVE_ID = '0AJz8fOdNJhtRUk9PVA'; // ✅ Shared Drive ID
 
-// Utility: simple timestamped log
+// Utility: timestamped logging
 function logStep(label, data = null) {
   const now = new Date().toISOString();
   if (data) console.log(`🕓 [${now}] ${label}`, data);
@@ -102,26 +105,34 @@ export async function generateAndUploadLabel({
     const pdfBytes = await doc.save();
     logStep('💾 PDF saved to memory', { size: pdfBytes.length });
 
-    const creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
+    // Load credentials (handle both local JSON + Cloud Run secret path)
+    let creds;
+    if (process.env.GOOGLE_SERVICE_ACCOUNT?.startsWith?.('/')) {
+      const path = process.env.GOOGLE_SERVICE_ACCOUNT;
+      logStep('🔑 Reading creds from file', path);
+      creds = JSON.parse(fs.readFileSync(path, 'utf8'));
+    } else {
+      logStep('🔑 Reading creds from env var');
+      creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
+    }
+
     const auth = new GoogleAuth({
       credentials: creds,
       scopes: ['https://www.googleapis.com/auth/drive.file'],
     });
     const drive = google.drive({ version: 'v3', auth });
-    logStep('🔑 Google Auth ready');
+    logStep('✅ Google Auth ready');
 
     const fileName = `BagLabel_${lastName || 'Last'}_${formId}_${index}of${total}.pdf`;
-    const stream = Readable.from([Buffer.from(pdfBytes)]);
-    logStep('📤 Uploading to Drive...', { fileName, folder: OUTPUT_FOLDER_ID });
-
     const uploadStream = Readable.from([Buffer.from(pdfBytes)]);
+    logStep('📤 Uploading to Drive...', { fileName, folder: OUTPUT_FOLDER_ID });
 
     const fileRes = await drive.files.create({
       requestBody: {
         name: fileName,
         mimeType: 'application/pdf',
         parents: [OUTPUT_FOLDER_ID],
-        driveId: '0AJz8fOdNJhtRUk9PVA', // your Shared Drive ID
+        driveId: DRIVE_ID,
       },
       media: { mimeType: 'application/pdf', body: uploadStream },
       supportsAllDrives: true,
