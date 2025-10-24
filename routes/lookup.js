@@ -31,7 +31,7 @@ router.post('/', async (req, res) => {
     const data = rows.slice(1);
 
     // Find row by Form ID
-    const idx = header.indexOf('Form ID');
+    const idx = header.indexOf('FormID');
     if (idx === -1) throw new Error('No Form ID column');
 
     const match = data.find(r => r[idx] === formId);
