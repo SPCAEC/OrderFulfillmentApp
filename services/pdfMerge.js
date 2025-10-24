@@ -10,91 +10,84 @@ import { Readable } from 'stream';
 
 const MERGE_SERVICE_URL = 'https://pdf-merge-service.onrender.com/merge';
 
-// 🔧 Helper: Authenticated Drive client
+// 🔧 Authenticated Drive client
 async function getDriveClient() {
   const creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
   const auth = new GoogleAuth({
     credentials: creds,
-    scopes: ['https://www.googleapis.com/auth/drive.file'],
+    scopes: ['https://www.googleapis.com/auth/drive.readonly', 'https://www.googleapis.com/auth/drive.file'],
   });
   return google.drive({ version: 'v3', auth });
 }
 
 // -----------------------------------------------------------------------------
-// MAIN: mergeAndUpload
+// MAIN
 // -----------------------------------------------------------------------------
 export async function mergeAndUpload({ fileIds, outputName, outputFolderId }) {
   if (!Array.isArray(fileIds) || fileIds.length === 0)
     return { ok: false, error: 'No file IDs provided for merge.' };
 
   try {
+    console.log('🧩 Starting mergeAndUpload');
+    console.log('➡️ File IDs:', fileIds);
+
     const drive = await getDriveClient();
 
-    console.log('🧩 mergeAndUpload started');
-    console.log('➡️ File IDs:', fileIds);
-    console.log('➡️ Output name:', outputName);
-    console.log('➡️ Output folder:', outputFolderId);
-
-    // 1️⃣ Get downloadable URLs for each file
-    const urls = await Promise.all(
-      fileIds.map(async id => {
-        const res = await drive.files.get({
-          fileId: id,
-          fields: 'webContentLink',
-          supportsAllDrives: true,
-        });
-        const url = res.data.webContentLink;
-        if (!url) throw new Error(`No webContentLink for ${id}`);
-        return url;
+    // 1️⃣ Download PDFs as base64
+    const pdfBuffers = await Promise.all(
+      fileIds.map(async (id) => {
+        const res = await drive.files.get(
+          { fileId: id, alt: 'media', supportsAllDrives: true },
+          { responseType: 'arraybuffer' }
+        );
+        console.log(`📥 Downloaded file ${id} (${res.data.byteLength} bytes)`);
+        return Buffer.from(res.data).toString('base64');
       })
     );
 
-    console.log('✅ Got Drive file URLs:', urls);
+    // 2️⃣ Merge via external service
+    console.log('📡 Sending to merge service...');
+    const mergeRes = await axios.post(
+      MERGE_SERVICE_URL,
+      { files: pdfBuffers },
+      { responseType: 'arraybuffer' }
+    );
 
-    // 2️⃣ Call external merge service
-    console.log('📡 Sending to merge service:', MERGE_SERVICE_URL);
-    const mergeRes = await axios.post(MERGE_SERVICE_URL, { urls }, { responseType: 'arraybuffer' });
-    console.log('✅ Merge service returned', mergeRes.status, mergeRes.headers['content-length'], 'bytes');
+    console.log('✅ Merge completed:', mergeRes.status, '–', mergeRes.data.byteLength, 'bytes');
 
-    // 3️⃣ Upload merged result to Drive
-    console.log('📤 Uploading merged file to Drive...');
+    // 3️⃣ Upload merged PDF back to Drive
     const pdfStream = Readable.from(Buffer.from(mergeRes.data));
-
-    const fileRes = await drive.files.create({
+    const driveUpload = await drive.files.create({
       requestBody: {
         name: outputName,
         mimeType: 'application/pdf',
         parents: [outputFolderId],
         driveId: '0AJz8fOdNJhtRUk9PVA',
       },
-      media: {
-        mimeType: 'application/pdf',
-        body: pdfStream,
-      },
+      media: { mimeType: 'application/pdf', body: pdfStream },
       supportsAllDrives: true,
       fields: 'id, webViewLink, webContentLink',
     });
 
-    console.log('✅ Merged PDF uploaded:', fileRes.data);
+    console.log('✅ Merged file uploaded:', driveUpload.data);
 
-    // 4️⃣ Clean up individual label PDFs
+    // 4️⃣ Clean up originals
     for (const id of fileIds) {
       try {
         await drive.files.delete({ fileId: id, supportsAllDrives: true });
         console.log(`🗑️ Deleted temp file ${id}`);
       } catch (err) {
-        console.warn(`⚠️ Could not delete temp file ${id}: ${err.message}`);
+        console.warn(`⚠️ Could not delete ${id}: ${err.message}`);
       }
     }
 
     return {
       ok: true,
-      fileId: fileRes.data.id,
-      url: fileRes.data.webViewLink || fileRes.data.webContentLink,
-      count: fileIds.length,
+      fileId: driveUpload.data.id,
+      url: driveUpload.data.webViewLink || driveUpload.data.webContentLink,
     };
   } catch (err) {
-    console.error('❌ mergeAndUpload failed:', err);
+    console.error('❌ mergeAndUpload failed:', err.message);
     return { ok: false, error: err.message };
   }
 }
