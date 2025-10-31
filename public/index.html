@@ -100,15 +100,19 @@
   </div>
 
   <!-- ───────────── Confirmation Modal ───────────── -->
-  <dialog id="confirmModal">
-    <h2>Confirm Label Printing</h2>
+  <dialog id="confirmModal" aria-labelledby="confirmTitle">
+    <h2 id="confirmTitle">Confirm Label Printing</h2>
     <p class="modal-text">
       Printing these labels will also notify the client that their order is ready for pickup.
     </p>
-    <menu>
-      <button class="btn secondary" value="cancel">Cancel</button>
-      <button class="btn primary" value="confirm">Print & Notify</button>
-    </menu>
+    <div class="modal-actions">
+      <button id="btnCancelModal" class="btn secondary" aria-label="Cancel printing">
+        Cancel
+      </button>
+      <button id="btnConfirmModal" class="btn primary" aria-label="Confirm printing">
+        Print & Notify
+      </button>
+    </div>
   </dialog>
 
   <!-- ───────────── Scripts ───────────── -->

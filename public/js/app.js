@@ -218,6 +218,24 @@ function openConfirmModal(count) {
   });
 }
 
+let pendingLabelCount = 0;
+
+function openConfirmModal(count) {
+  pendingLabelCount = count;
+  els.confirmModal.querySelector('.modal-text').textContent =
+    `Printing ${count} label(s) will also notify the client. Proceed?`;
+  els.confirmModal.showModal();
+}
+
+const btnCancelModal = document.getElementById('btnCancelModal');
+const btnConfirmModal = document.getElementById('btnConfirmModal');
+
+btnCancelModal.addEventListener('click', () => els.confirmModal.close());
+btnConfirmModal.addEventListener('click', () => {
+  els.confirmModal.close();
+  generateLabels(pendingLabelCount);
+});
+
 async function generateLabels(count) {
   if (!currentOrder) return alert('Lookup an order first.');
 
