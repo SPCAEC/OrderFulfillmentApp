@@ -1,9 +1,11 @@
 // services/pdfMerge.js
 // -----------------------------------------------------------------------------
 // Combines multiple PDF files (by Drive ID) into a single PDF via external merge service.
+// Compatible with Node 18+ / Cloud Run (binary-safe FormData upload).
 // -----------------------------------------------------------------------------
 
-import axios from 'axios';
+import fetch from 'node-fetch';
+import FormData from 'form-data';
 import { google } from 'googleapis';
 import { GoogleAuth } from 'google-auth-library';
 
@@ -14,7 +16,10 @@ async function getDriveClient() {
   const creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
   const auth = new GoogleAuth({
     credentials: creds,
-    scopes: ['https://www.googleapis.com/auth/drive.readonly', 'https://www.googleapis.com/auth/drive.file'],
+    scopes: [
+      'https://www.googleapis.com/auth/drive.readonly',
+      'https://www.googleapis.com/auth/drive.file',
+    ],
   });
   return google.drive({ version: 'v3', auth });
 }
@@ -28,35 +33,53 @@ export async function mergeAndUpload({ fileIds, outputName, outputFolderId }) {
 
   try {
     const drive = await getDriveClient();
-
     console.log(`📦 Fetching ${fileIds.length} PDFs for merge...`);
 
-    // 1️⃣ Download each file as base64
-    const files = [];
-    for (const id of fileIds) {
+    // 1️⃣ Download each PDF as a Buffer
+    const buffers = [];
+    for (const [i, id] of fileIds.entries()) {
       try {
         const res = await drive.files.get(
           { fileId: id, alt: 'media' },
           { responseType: 'arraybuffer' }
         );
-        const base64Content = Buffer.from(res.data).toString('base64');
-        files.push({ name: `${id}.pdf`, content: base64Content });
+        const buffer = Buffer.from(res.data);
+        buffers.push({ name: `label_${i + 1}.pdf`, buffer });
       } catch (err) {
         console.error(`⚠️ Failed to fetch file ${id}:`, err.message);
       }
     }
 
-    console.log(`🧾 Prepared ${files.length}/${fileIds.length} files for merge`);
+    if (buffers.length === 0)
+      throw new Error('No valid PDFs fetched for merge.');
 
-    if (files.length === 0)
-      throw new Error('No valid base64 PDFs fetched for merge.');
+    console.log(`🧾 Prepared ${buffers.length}/${fileIds.length} PDFs for merge.`);
 
-    // 2️⃣ Send to Render merge service
-    console.log(`🚀 Sending ${files.length} files to merge service...`);
-    const mergeRes = await axios.post(MERGE_SERVICE_URL, { files }, { responseType: 'arraybuffer' });
+    // 2️⃣ Build FormData for Render merge service
+    const form = new FormData();
+    buffers.forEach((f) => {
+      form.append('files', f.buffer, {
+        filename: f.name,
+        contentType: 'application/pdf',
+      });
+    });
 
-    // 3️⃣ Upload merged file back to Drive
-    const fileRes = await drive.files.create({
+    // 3️⃣ Send to Render merge service
+    console.log(`🚀 Uploading to merge service: ${MERGE_SERVICE_URL}`);
+    const mergeRes = await fetch(MERGE_SERVICE_URL, {
+      method: 'POST',
+      body: form,
+    });
+
+    if (!mergeRes.ok) {
+      const txt = await mergeRes.text();
+      throw new Error(`Merge service error: ${mergeRes.status} ${txt}`);
+    }
+
+    const mergedBuffer = Buffer.from(await mergeRes.arrayBuffer());
+
+    // 4️⃣ Upload merged PDF back to Drive
+    const uploadRes = await drive.files.create({
       requestBody: {
         name: outputName,
         mimeType: 'application/pdf',
@@ -64,12 +87,12 @@ export async function mergeAndUpload({ fileIds, outputName, outputFolderId }) {
       },
       media: {
         mimeType: 'application/pdf',
-        body: Buffer.from(mergeRes.data),
+        body: mergedBuffer,
       },
       fields: 'id, webViewLink, webContentLink',
     });
 
-    // 4️⃣ Optional cleanup
+    // 5️⃣ Optional cleanup of originals
     for (const id of fileIds) {
       try {
         await drive.files.delete({ fileId: id });
@@ -78,13 +101,13 @@ export async function mergeAndUpload({ fileIds, outputName, outputFolderId }) {
       }
     }
 
-    console.log(`✅ Merged PDF uploaded: ${fileRes.data.id}`);
+    console.log(`✅ Merged PDF uploaded: ${uploadRes.data.id}`);
 
     return {
       ok: true,
-      fileId: fileRes.data.id,
-      url: fileRes.data.webViewLink || fileRes.data.webContentLink,
-      count: files.length,
+      fileId: uploadRes.data.id,
+      url: uploadRes.data.webViewLink || uploadRes.data.webContentLink,
+      count: buffers.length,
     };
   } catch (err) {
     console.error('❌ mergeAndUpload failed:', err);
